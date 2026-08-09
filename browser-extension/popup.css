@@ -1,0 +1,85 @@
+body {
+  width: 330px;
+  margin: 0;
+  background: #111827;
+  color: #f9fafb;
+  font:
+    13px / 1.45 system-ui,
+    sans-serif;
+}
+main {
+  padding: 16px;
+}
+h1 {
+  margin: 0 0 6px;
+  font-size: 17px;
+}
+h2 {
+  margin: 14px 0 6px;
+  font-size: 14px;
+}
+p,
+small {
+  color: #cbd5e1;
+}
+label {
+  display: block;
+  margin-top: 12px;
+  font-weight: 600;
+}
+input {
+  box-sizing: border-box;
+  width: 100%;
+  margin-top: 5px;
+  padding: 8px 10px;
+  border: 1px solid #475569;
+  border-radius: 6px;
+  background: #1f2937;
+  color: #f9fafb;
+}
+button {
+  width: 100%;
+  margin: 14px 0 8px;
+  padding: 9px;
+  border: 0;
+  border-radius: 6px;
+  background: #f97316;
+  color: white;
+  font-weight: 700;
+  cursor: pointer;
+}
+button:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+.secondary {
+  margin-top: 8px;
+  background: #334155;
+}
+.danger {
+  background: #dc2626;
+}
+.confirmation {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 10px;
+  font-weight: 400;
+}
+.confirmation input {
+  width: auto;
+  margin: 2px 0 0;
+}
+#reviewPanel {
+  margin: 10px 0;
+  padding-top: 4px;
+  border-top: 1px solid #334155;
+}
+#reviewStatus {
+  min-height: 38px;
+  color: #cbd5e1;
+}
+#status {
+  min-height: 38px;
+  margin: 4px 0 8px;
+}

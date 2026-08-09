@@ -1,0 +1,41 @@
+# Environment files
+.env
+.env.*
+!.env.example
+*.env.local
+
+# Secrets and signing material
+*.key
+*.pem
+*.p12
+*.pfx
+*.jks
+*.keystore
+
+# Dependencies
+node_modules/
+**/node_modules/
+**/.package-lock.json
+
+# Data directory (bind mount in Docker)
+data/
+orchestrator/data/
+
+# Local databases, logs, and generated reports
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+*.log
+coverage/
+**/coverage/
+
+# JobSpy temp output files
+extractors/jobspy/storage/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# JetBrains IDE
+.idea/

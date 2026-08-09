@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <link rel="stylesheet" href="popup.css" />
+    <title>Job Apply Auto-fill</title>
+  </head>
+  <body>
+    <main>
+      <h1>Job Apply Auto-fill</h1>
+      <p>Paste the short-lived code copied from the Job Apply job page.</p>
+      <label for="code">Auto-fill code</label>
+      <input id="code" type="password" autocomplete="off" />
+      <label for="apiBase">Local app URL</label>
+      <input id="apiBase" value="http://localhost:3005" />
+      <button id="fill" type="button">Fill this page</button>
+      <div id="status" role="status"></div>
+      <section id="reviewPanel" hidden>
+        <h2>Submission review</h2>
+        <button id="review" type="button" class="secondary">Recheck page</button>
+        <div id="reviewStatus" role="status"></div>
+        <label class="confirmation">
+          <input id="confirm" type="checkbox" />
+          <span>I reviewed every answer and want to submit this application.</span>
+        </label>
+        <button id="submit" type="button" class="danger" disabled>
+          Confirm and submit application
+        </button>
+      </section>
+      <small>Nothing is submitted until you complete the review and click the confirmation button.</small>
+    </main>
+    <script src="popup.js"></script>
+  </body>
+</html>

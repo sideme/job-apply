@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "enabled": false,
+  "workAuthorization": {
+    "country": "Canada",
+    "authorizedToWork": true,
+    "permitType": "Open work permit",
+    "permitExpiryDate": "2029-03-23",
+    "requiresSponsorship": false
+  },
+  "answers": {
+    "workAuthorizationText": "I am legally authorized to work in Canada.",
+    "sponsorshipText": "I do not require employer sponsorship to work in Canada.",
+    "relocation": "depends"
+  },
+  "demographics": {
+    "enabled": false,
+    "gender": "prefer_not_to_say",
+    "sexAtBirth": "prefer_not_to_say",
+    "genderIdentity": "prefer_not_to_say",
+    "sexualOrientation": "prefer_not_to_say",
+    "raceEthnicity": ["prefer_not_to_say"],
+    "indigenousIdentity": "prefer_not_to_say",
+    "disability": "prefer_not_to_say",
+    "veteranStatus": "prefer_not_to_say",
+    "pronouns": "",
+    "languages": []
+  }
+}
