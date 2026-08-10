@@ -4,7 +4,7 @@
 
 **Goal:** Add per-site failure isolation and a LinkedIn-specific cooldown/circuit-breaker to the JobSpy extractor, relay job-ops's existing pipeline webhooks to WhatsApp, and get a first real pipeline run configured for nationwide Canada discovery.
 
-> Status (2026-08-08): implementation tasks are complete. The unchecked boxes below are retained as the original TDD execution record. The WhatsApp relay is available as the optional `notifications` Docker profile; recurring discovery is available as the optional `scheduler` Docker profile. Both still require the user's own credentials and search settings before they are enabled.
+> Status (2026-08-09): retained only as the original TDD execution record. The unchecked boxes and relay commands below are historical and must not be followed. WhatsApp now sends directly from the server, and recurring discovery uses the optional `scheduler` Docker profile. Use the root README for current setup.
 
 **Architecture:** `scrape_jobs.py` scrapes each JobSpy site independently and reports per-site failures via a new `site_error` progress event instead of crashing the whole process. The TS wrapper (`run.ts`) aggregates these into `JobSpyResult.siteErrors`, which the `jobspy` manifest passes through unchanged. `discoverJobsStep` (the one orchestrator-level place that already knows about all sources) checks a `linkedinCooldownUntil` setting before running LinkedIn, and after a run, trips the breaker (sets the cooldown + notifies) if a LinkedIn `site_error` came back — without failing the rest of the pipeline. Notifications go out through job-ops's existing webhook mechanism to a small local relay script that forwards to WhatsApp via CallMeBot.
 

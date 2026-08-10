@@ -97,7 +97,6 @@ const migrations = [
     tailored_skills TEXT,
     selected_project_ids TEXT,
     pdf_path TEXT,
-    tracer_links_enabled INTEGER NOT NULL DEFAULT 0,
     discovered_at TEXT NOT NULL DEFAULT (datetime('now')),
     processed_at TEXT,
     applied_at TEXT,
@@ -274,36 +273,6 @@ const migrations = [
     UNIQUE(provider, account_key, external_message_id)
   )`,
 
-  `CREATE TABLE IF NOT EXISTS tracer_links (
-    id TEXT PRIMARY KEY,
-    token TEXT NOT NULL UNIQUE,
-    job_id TEXT NOT NULL,
-    source_path TEXT NOT NULL,
-    source_label TEXT NOT NULL,
-    destination_url TEXT NOT NULL,
-    destination_url_hash TEXT NOT NULL,
-    is_active INTEGER NOT NULL DEFAULT 1,
-    created_at TEXT NOT NULL DEFAULT (datetime('now')),
-    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-    FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE CASCADE,
-    UNIQUE(job_id, source_path, destination_url_hash)
-  )`,
-
-  `CREATE TABLE IF NOT EXISTS tracer_click_events (
-    id TEXT PRIMARY KEY,
-    tracer_link_id TEXT NOT NULL,
-    clicked_at INTEGER NOT NULL,
-    request_id TEXT,
-    is_likely_bot INTEGER NOT NULL DEFAULT 0,
-    device_type TEXT NOT NULL DEFAULT 'unknown',
-    ua_family TEXT NOT NULL DEFAULT 'unknown',
-    os_family TEXT NOT NULL DEFAULT 'unknown',
-    referrer_host TEXT,
-    ip_hash TEXT,
-    unique_fingerprint_hash TEXT,
-    FOREIGN KEY (tracer_link_id) REFERENCES tracer_links(id) ON DELETE CASCADE
-  )`,
-
   // Rename settings key: webhookUrl -> pipelineWebhookUrl (safe to re-run)
   `INSERT OR REPLACE INTO settings(key, value, created_at, updated_at)
    SELECT 'pipelineWebhookUrl', value, created_at, updated_at FROM settings WHERE key = 'webhookUrl'`,
@@ -356,11 +325,6 @@ const migrations = [
   `ALTER TABLE jobs ADD COLUMN selected_project_ids TEXT`,
   `ALTER TABLE jobs ADD COLUMN tailored_headline TEXT`,
   `ALTER TABLE jobs ADD COLUMN tailored_skills TEXT`,
-  `ALTER TABLE jobs ADD COLUMN tracer_links_enabled INTEGER NOT NULL DEFAULT 0`,
-
-  // Add sponsor match columns for visa sponsor matching feature
-  `ALTER TABLE jobs ADD COLUMN sponsor_match_score REAL`,
-  `ALTER TABLE jobs ADD COLUMN sponsor_match_names TEXT`,
 
   // Add application tracking columns
   `ALTER TABLE jobs ADD COLUMN outcome TEXT`,
@@ -489,9 +453,6 @@ const migrations = [
     tailored_skills TEXT,
     selected_project_ids TEXT,
     pdf_path TEXT,
-    tracer_links_enabled INTEGER NOT NULL DEFAULT 0,
-    sponsor_match_score REAL,
-    sponsor_match_names TEXT,
     duplicate_of_job_id TEXT,
     discovered_at TEXT NOT NULL DEFAULT (datetime('now')),
     processed_at TEXT,
@@ -508,7 +469,7 @@ const migrations = [
     deadline, salary, location, degree_required, starting, job_description, status, outcome, closed_at,
     suitability_score, suitability_reason, suitability_reason_source, semantic_score, keyword_coverage,
     keyword_missing, job_embedding, job_embedding_model, job_embedding_hash, tailored_summary, tailored_headline, tailored_skills,
-    selected_project_ids, pdf_path, tracer_links_enabled, sponsor_match_score, sponsor_match_names, duplicate_of_job_id,
+    selected_project_ids, pdf_path, duplicate_of_job_id,
     discovered_at, processed_at,
     applied_at, created_at, updated_at
   )
@@ -521,7 +482,7 @@ const migrations = [
     deadline, salary, location, degree_required, starting, job_description, status, outcome, closed_at,
     suitability_score, suitability_reason, suitability_reason_source, semantic_score, keyword_coverage,
     keyword_missing, job_embedding, job_embedding_model, job_embedding_hash, tailored_summary, tailored_headline, tailored_skills,
-    selected_project_ids, pdf_path, tracer_links_enabled, sponsor_match_score, sponsor_match_names, duplicate_of_job_id,
+    selected_project_ids, pdf_path, duplicate_of_job_id,
     discovered_at, processed_at,
     applied_at, created_at, updated_at
   FROM jobs`,
@@ -574,12 +535,6 @@ const migrations = [
   `CREATE INDEX IF NOT EXISTS idx_job_chat_threads_job_updated ON job_chat_threads(job_id, updated_at)`,
   `CREATE INDEX IF NOT EXISTS idx_job_chat_messages_thread_created ON job_chat_messages(thread_id, created_at)`,
   `CREATE INDEX IF NOT EXISTS idx_job_chat_runs_thread_status ON job_chat_runs(thread_id, status)`,
-  `CREATE INDEX IF NOT EXISTS idx_tracer_links_token ON tracer_links(token)`,
-  `CREATE INDEX IF NOT EXISTS idx_tracer_links_job_id ON tracer_links(job_id)`,
-  `CREATE INDEX IF NOT EXISTS idx_tracer_click_events_tracer_link_id ON tracer_click_events(tracer_link_id)`,
-  `CREATE INDEX IF NOT EXISTS idx_tracer_click_events_clicked_at ON tracer_click_events(clicked_at)`,
-  `CREATE INDEX IF NOT EXISTS idx_tracer_click_events_is_likely_bot ON tracer_click_events(is_likely_bot)`,
-  `CREATE INDEX IF NOT EXISTS idx_tracer_click_events_unique_fingerprint_hash ON tracer_click_events(unique_fingerprint_hash)`,
   // Ensure only one running run per thread; backfill any duplicates first.
   `WITH ranked AS (
       SELECT

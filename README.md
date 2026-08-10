@@ -6,7 +6,7 @@ The Jobs screen loads 60 postings at a time and exposes **Load more jobs** when 
 
 Forked from [job-ops](https://github.com/DaKheera47/job-ops) and trimmed down to only what's needed here (dropped the UK-specific extractors, the public docs site, and unused sources). No shared git history with upstream by design.
 
-See [docs/superpowers/specs](docs/superpowers/specs) for the requirements/design doc and [docs/superpowers/plans](docs/superpowers/plans) for the active implementation plan.
+See [docs/superpowers/specs](docs/superpowers/specs) and [docs/superpowers/plans](docs/superpowers/plans) for historical design and implementation records. The current README is authoritative for setup and supported features.
 
 ## Setup
 
@@ -34,7 +34,7 @@ It searches Indeed every hour and includes LinkedIn every three hours by default
 
 ## WhatsApp notifications
 
-Open **Settings → Notifications & Webhooks**, enable WhatsApp, enter your phone number including country code and your personal CallMeBot API key, save, then choose **Send test notification**. The key is stored as a secret and is never returned to the browser after saving. Pipeline completion, failure, and LinkedIn cooldown events are sent directly; the older `notifications` relay profile remains available only for webhook-based setups.
+Open **Settings → Notifications & Webhooks**, enable WhatsApp, enter your phone number including country code and your personal CallMeBot API key, save, then choose **Send test notification**. The key is stored as a secret and is never returned to the browser after saving. Notifications are sent directly for pipeline completion/failure, LinkedIn cooldowns, newly scored jobs at 80 or above, browser-extension submissions, and newly auto-linked interview emails.
 
 CallMeBot is intended for personal notifications and requires a one-time WhatsApp opt-in before it issues an API key. Without a phone number and API key, job discovery and the scheduler continue normally, but WhatsApp delivery remains disabled.
 
@@ -63,7 +63,7 @@ The extension detects native and React-controlled text fields, selects, radio bu
 }
 ```
 
-After filling, choose **Recheck page**. Submission remains blocked if the fill plan has unresolved questions, a required field is empty, a CAPTCHA is visible, or the final Submit button is ambiguous. When the review passes, tick the confirmation checkbox and choose **Confirm and submit application**. Verify the employer's confirmation page afterward. Multi-step forms can be filled one page at a time by choosing **Fill this page** again.
+After filling, choose **Recheck page**. Submission remains blocked if the fill plan has unresolved questions, a required field is empty, a CAPTCHA is visible, or the final Submit button is ambiguous. When the review passes, tick the confirmation checkbox and choose **Confirm and submit application**. The extension records the job as applied and sends the configured WhatsApp notification after it clicks the unique submit button. Verify the employer's confirmation page afterward. Multi-step forms can be filled one page at a time by choosing **Fill this page** again.
 
 ## Matching without per-job chat calls
 

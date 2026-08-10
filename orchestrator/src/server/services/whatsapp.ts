@@ -1,5 +1,6 @@
 import { logger } from "@infra/logger";
 import * as settingsRepo from "@server/repositories/settings";
+import type { Job } from "@shared/types";
 
 type WhatsAppConfig = {
   enabled: boolean;
@@ -10,7 +11,21 @@ type WhatsAppConfig = {
 export type WhatsAppEvent =
   | "pipeline.completed"
   | "pipeline.failed"
-  | "linkedin.circuit_breaker_tripped";
+  | "linkedin.circuit_breaker_tripped"
+  | "jobs.high_match"
+  | "application.submitted"
+  | "interview.received";
+
+type HighMatchJob = Pick<
+  Job,
+  | "id"
+  | "title"
+  | "employer"
+  | "suitabilityScore"
+  | "applicationLink"
+  | "jobUrlDirect"
+  | "jobUrl"
+>;
 
 function parseEnabled(value: string | null | undefined): boolean {
   return value === "1" || value === "true";
@@ -43,7 +58,71 @@ export function formatWhatsAppEvent(
       typeof payload.error === "string" ? payload.error : "Unknown error";
     return `Job Apply: scheduled search failed. ${error.slice(0, 200)}`;
   }
+  if (event === "jobs.high_match") {
+    const count = typeof payload.count === "number" ? payload.count : 0;
+    const threshold =
+      typeof payload.threshold === "number" ? payload.threshold : 80;
+    const jobs = Array.isArray(payload.jobs)
+      ? payload.jobs.slice(0, 3).filter((job) => job && typeof job === "object")
+      : [];
+    const lines = jobs.map((job) => {
+      const item = job as Record<string, unknown>;
+      const title = String(item.title ?? "Role").slice(0, 100);
+      const employer = String(item.employer ?? "Unknown employer").slice(0, 80);
+      const score = typeof item.score === "number" ? ` (${item.score})` : "";
+      const url = typeof item.url === "string" ? `\n${item.url}` : "";
+      return `• ${title} @ ${employer}${score}${url}`;
+    });
+    return [
+      `Job Apply: ${count} new job${count === 1 ? "" : "s"} scored ${threshold}+.`,
+      ...lines,
+    ]
+      .filter(Boolean)
+      .join("\n");
+  }
+  if (event === "application.submitted") {
+    const title = String(payload.title ?? "Role").slice(0, 100);
+    const employer = String(payload.employer ?? "Unknown employer").slice(
+      0,
+      80,
+    );
+    return `Job Apply: application submitted — ${title} @ ${employer}.`;
+  }
+  if (event === "interview.received") {
+    const title = String(payload.title ?? "Role").slice(0, 100);
+    const employer = String(payload.employer ?? "Unknown employer").slice(
+      0,
+      80,
+    );
+    const subject = String(payload.subject ?? "Interview update").slice(0, 160);
+    return `Job Apply: interview email received — ${title} @ ${employer}. Subject: ${subject}`;
+  }
   return `Job Apply: LinkedIn search paused by the safety circuit breaker until ${payload.cooldownUntil ?? "later"}.`;
+}
+
+export async function notifyHighMatchJobs(
+  jobs: HighMatchJob[],
+  threshold: number,
+): Promise<void> {
+  const matches = jobs
+    .filter((job) => (job.suitabilityScore ?? 0) >= threshold)
+    .sort(
+      (left, right) =>
+        (right.suitabilityScore ?? 0) - (left.suitabilityScore ?? 0),
+    );
+  if (matches.length === 0) return;
+
+  await notifyWhatsAppEvent("jobs.high_match", {
+    count: matches.length,
+    threshold,
+    jobs: matches.slice(0, 3).map((job) => ({
+      id: job.id,
+      title: job.title,
+      employer: job.employer,
+      score: job.suitabilityScore,
+      url: job.applicationLink || job.jobUrlDirect || job.jobUrl,
+    })),
+  });
 }
 
 export async function sendWhatsAppMessage(

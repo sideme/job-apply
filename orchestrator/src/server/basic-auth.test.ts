@@ -67,14 +67,14 @@ describe.sequential("Basic Auth read-only enforcement", () => {
     expect(res.status).not.toHaveBeenCalled();
   });
 
-  it("allows the token-protected application assistant endpoint", () => {
+  it.each([
+    "/api/application-assistant/fill",
+    "/api/application-assistant/submitted",
+  ])("allows the token-protected application assistant endpoint %s", (path) => {
     process.env.BASIC_AUTH_USER = "user";
     process.env.BASIC_AUTH_PASSWORD = "pass";
     const { middleware } = createBasicAuthGuard();
-    const req = createMockRequest({
-      method: "POST",
-      path: "/api/application-assistant/fill",
-    });
+    const req = createMockRequest({ method: "POST", path });
     const res = createMockResponse();
     const next = vi.fn() as NextFunction;
 

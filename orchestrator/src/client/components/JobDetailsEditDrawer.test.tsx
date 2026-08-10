@@ -4,7 +4,6 @@ import { fireEvent, screen, waitFor } from "@testing-library/react";
 import type React from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as api from "../api";
-import { _resetTracerReadinessCache } from "../hooks/useTracerReadiness";
 import { renderWithQueryClient } from "../test/renderWithQueryClient";
 import { JobDetailsEditDrawer } from "./JobDetailsEditDrawer";
 
@@ -30,9 +29,7 @@ vi.mock("@/components/ui/sheet", () => ({
 
 vi.mock("../api", () => ({
   updateJob: vi.fn(),
-  checkSponsor: vi.fn(),
   rescoreJob: vi.fn(),
-  getTracerReadiness: vi.fn(),
 }));
 
 vi.mock("sonner", () => ({
@@ -45,23 +42,12 @@ vi.mock("sonner", () => ({
 describe("JobDetailsEditDrawer", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    _resetTracerReadinessCache();
-    vi.mocked(api.getTracerReadiness).mockResolvedValue({
-      status: "ready",
-      canEnable: true,
-      publicBaseUrl: "https://my-jobops.example.com",
-      healthUrl: "https://my-jobops.example.com/health",
-      checkedAt: Date.now(),
-      lastSuccessAt: Date.now(),
-      reason: null,
-    });
   });
 
   it("saves edited details without running a legacy sponsor check", async () => {
     const onJobUpdated = vi.fn().mockResolvedValue(undefined);
     const onOpenChange = vi.fn();
     vi.mocked(api.updateJob).mockResolvedValue({} as Job);
-    vi.mocked(api.checkSponsor).mockResolvedValue({} as Job);
 
     render(
       <JobDetailsEditDrawer
@@ -87,7 +73,6 @@ describe("JobDetailsEditDrawer", () => {
         }),
       ),
     );
-    expect(api.checkSponsor).not.toHaveBeenCalled();
     expect(onJobUpdated).toHaveBeenCalledTimes(1);
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
@@ -153,23 +138,5 @@ describe("JobDetailsEditDrawer", () => {
 
     await waitFor(() => expect(api.rescoreJob).toHaveBeenCalledWith("job-1"));
     expect(onJobUpdated).toHaveBeenCalledTimes(2);
-  });
-
-  it("does not expose legacy tracer-link controls", () => {
-    render(
-      <JobDetailsEditDrawer
-        open
-        onOpenChange={vi.fn()}
-        job={createJob({ tracerLinksEnabled: false })}
-        onJobUpdated={vi.fn()}
-      />,
-    );
-
-    expect(
-      screen.queryByRole("checkbox", {
-        name: "Enable tracer links for this job",
-      }),
-    ).not.toBeInTheDocument();
-    expect(api.getTracerReadiness).not.toHaveBeenCalled();
   });
 });

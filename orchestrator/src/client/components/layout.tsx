@@ -351,7 +351,7 @@ export const ScoreMeter: React.FC<ScoreMeterProps> = ({
 };
 
 // ============================================================================
-// Full Height Split Layout (for pages like VisaSponsors that use full viewport)
+// Full Height Split Layout
 // ============================================================================
 
 interface FullHeightSplitProps {

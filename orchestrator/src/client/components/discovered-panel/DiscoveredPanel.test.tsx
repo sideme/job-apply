@@ -45,14 +45,13 @@ vi.mock("@/components/ui/dropdown-menu", () => {
 });
 
 vi.mock("@client/hooks/useSettings", () => ({
-  useSettings: () => ({ showSponsorInfo: false }),
+  useSettings: () => ({ settings: null }),
 }));
 
 vi.mock("@client/api", () => ({
   rescoreJob: vi.fn(),
   skipJob: vi.fn(),
   processJob: vi.fn(),
-  checkSponsor: vi.fn(),
 }));
 
 vi.mock("../JobDetailsEditDrawer", () => ({

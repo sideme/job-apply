@@ -20,7 +20,6 @@ export const DEMO_DEFAULT_SETTINGS: DemoDefaultSettings = {
     "backend engineer",
     "full stack engineer",
   ]),
-  showSponsorInfo: "1",
   backupEnabled: "0",
   backupHour: "2",
   backupMaxCount: "5",
@@ -69,14 +68,6 @@ export const DEMO_PROJECT_CATALOG: ResumeProjectCatalogItem[] = [
     name: "Observability Dashboard",
     description:
       "Implemented request tracing, structured logs, and SLO-driven dashboards for pipeline health.",
-    date: "2023",
-    isVisibleInBase: false,
-  },
-  {
-    id: "demo-project-5",
-    name: "Sponsor Match Index",
-    description:
-      "Shipped a fuzzy-match sponsor index with explainable scores and cached lookup acceleration.",
     date: "2023",
     isVisibleInBase: false,
   },

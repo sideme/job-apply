@@ -15,7 +15,7 @@ describe("useSettings", () => {
   });
 
   it("fetches settings on mount if not already cached", async () => {
-    const mockSettings = { showSponsorInfo: false };
+    const mockSettings = { model: { value: "test-model" } };
     vi.mocked(api.getSettings).mockResolvedValue(mockSettings as any);
 
     const { result } = renderHookWithQueryClient(() => useSettings());
@@ -27,7 +27,6 @@ describe("useSettings", () => {
       expect(result.current.settings).toEqual(mockSettings);
     });
 
-    expect(result.current.showSponsorInfo).toBe(false);
     expect(api.getSettings).toHaveBeenCalledTimes(1);
   });
 
@@ -37,14 +36,14 @@ describe("useSettings", () => {
     const { result } = renderHookWithQueryClient(() => useSettings());
 
     await waitFor(() => {
-      // settings is null, so showSponsorInfo should default to true
-      expect(result.current.showSponsorInfo).toBe(true);
+      expect(result.current.settings).toBeNull();
+      expect(result.current.isLoading).toBe(false);
     });
   });
 
   it("provides a refresh function that updates settings", async () => {
-    const initialSettings = { showSponsorInfo: true };
-    const updatedSettings = { showSponsorInfo: false };
+    const initialSettings = { model: { value: "initial" } };
+    const updatedSettings = { model: { value: "updated" } };
 
     vi.mocked(api.getSettings).mockResolvedValueOnce(initialSettings as any);
     vi.mocked(api.getSettings).mockResolvedValueOnce(updatedSettings as any);
@@ -65,7 +64,6 @@ describe("useSettings", () => {
     });
 
     expect(refreshed).toEqual(updatedSettings);
-    expect(result.current.showSponsorInfo).toBe(false);
   });
 
   it("handles errors when fetching settings", async () => {

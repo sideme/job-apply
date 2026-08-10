@@ -54,10 +54,6 @@ vi.mock("./pages/TrackingInboxPage", () => ({
   TrackingInboxPage: () => null,
 }));
 
-vi.mock("./pages/VisaSponsorsPage", () => ({
-  VisaSponsorsPage: () => null,
-}));
-
 describe("App demo banner", () => {
   beforeEach(() => {
     vi.clearAllMocks();

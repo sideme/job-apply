@@ -76,23 +76,6 @@ vi.mock("@server/services/profile", () => ({
   getProfile: vi.fn().mockResolvedValue({}),
 }));
 
-vi.mock("@server/services/visa-sponsors/index", () => ({
-  getStatus: vi.fn(),
-  searchSponsors: vi.fn(),
-  getOrganizationDetails: vi.fn(),
-  downloadLatestCsv: vi.fn(),
-  calculateSponsorMatchSummary: vi.fn((results) => {
-    if (!results || results.length === 0)
-      return { sponsorMatchScore: 0, sponsorMatchNames: null };
-    return {
-      sponsorMatchScore: results[0].score,
-      sponsorMatchNames: JSON.stringify(
-        results.map((r: any) => r.sponsor.organisationName),
-      ),
-    };
-  }),
-}));
-
 const originalEnv = { ...process.env };
 
 export async function startServer(options?: {

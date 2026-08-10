@@ -43,9 +43,6 @@ export const createJob = (overrides: Partial<Job> = {}): Job => ({
   tailoredSkills: null,
   selectedProjectIds: null,
   pdfPath: null,
-  tracerLinksEnabled: false,
-  sponsorMatchScore: null,
-  sponsorMatchNames: null,
   jobType: null,
   salarySource: null,
   salaryInterval: null,
@@ -185,7 +182,6 @@ export const createAppSettings = (
     default: "united kingdom",
     override: null,
   },
-  showSponsorInfo: { value: true, default: true, override: null },
   chatStyleTone: {
     value: "professional",
     default: "professional",

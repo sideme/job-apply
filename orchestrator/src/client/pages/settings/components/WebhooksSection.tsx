@@ -72,8 +72,9 @@ export const WebhooksSection: React.FC<WebhooksSectionProps> = ({
             <div>
               <div className="text-sm font-medium">WhatsApp</div>
               <p className="mt-1 text-xs text-muted-foreground">
-                Personal notifications through CallMeBot when a scheduled job
-                search completes, fails, or pauses LinkedIn for safety.
+                Personal CallMeBot notifications for scheduled searches,
+                high-match jobs, confirmed browser submissions, interview
+                emails, and LinkedIn safety pauses.
               </p>
             </div>
 

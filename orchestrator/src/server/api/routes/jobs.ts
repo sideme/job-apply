@@ -38,6 +38,7 @@ import { enrichJobPostingDate } from "@server/services/posting-date-enrichment";
 import { getProfile } from "@server/services/profile";
 import { scoreJobSuitability } from "@server/services/scorer";
 import { calculateLocalJobScore } from "@server/services/scoring/local-score-job";
+import { notifyWhatsAppEvent } from "@server/services/whatsapp";
 import { asyncPool } from "@server/utils/async-pool";
 import {
   APPLICATION_OUTCOMES,
@@ -917,6 +918,7 @@ jobsRouter.get("/:id", async (req: Request, res: Response) => {
     if (!job) {
       return fail(res, notFound("Job not found"));
     }
+
     res.json({ success: true, data: job });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
@@ -1198,6 +1200,10 @@ jobsRouter.post("/:id/apply", async (req: Request, res: Response) => {
       return fail(res, notFound("Job not found"));
     }
 
+    if (job.status === "applied") {
+      return ok(res, job);
+    }
+
     const appliedAtDate = new Date();
     const appliedAt = appliedAtDate.toISOString();
 
@@ -1220,6 +1226,11 @@ jobsRouter.post("/:id/apply", async (req: Request, res: Response) => {
     if (updatedJob) {
       notifyJobCompleteWebhook(updatedJob).catch((error) => {
         logger.warn("Job complete webhook dispatch failed", error);
+      });
+      await notifyWhatsAppEvent("application.submitted", {
+        jobId: updatedJob.id,
+        title: updatedJob.title,
+        employer: updatedJob.employer,
       });
     }
 

@@ -49,7 +49,7 @@ vi.mock("../hooks/useProfile", () => ({
 }));
 
 vi.mock("../hooks/useSettings", () => ({
-  useSettings: () => ({ showSponsorInfo: false }),
+  useSettings: () => ({ settings: null }),
 }));
 
 vi.mock("../api", () => ({
@@ -57,7 +57,6 @@ vi.mock("../api", () => ({
   getResumeProjectsCatalog: vi.fn().mockResolvedValue([]),
   markAsApplied: vi.fn(),
   generateJobPdf: vi.fn(),
-  checkSponsor: vi.fn(),
   skipJob: vi.fn(),
   updateJob: vi.fn(),
 }));

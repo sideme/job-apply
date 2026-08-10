@@ -26,7 +26,6 @@ export function useSettings() {
     settings,
     error: error ?? null,
     isLoading: isLoading || (!!isFetching && !settings && !error),
-    showSponsorInfo: settings?.showSponsorInfo ?? true,
     refreshSettings,
   };
 }

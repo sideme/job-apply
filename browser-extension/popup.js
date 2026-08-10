@@ -9,6 +9,8 @@ const confirmCheckbox = document.getElementById("confirm");
 const submitButton = document.getElementById("submit");
 let activeTabId = null;
 let lastReviewAllowed = false;
+let activeCode = null;
+let activeApiBase = null;
 
 chrome.storage.local.get(["apiBase"], (saved) => {
   if (saved.apiBase) apiBaseInput.value = saved.apiBase;
@@ -87,8 +89,25 @@ submitButton.addEventListener("click", async () => {
     if (!response?.ok) {
       throw new Error(response?.error || "The page blocked submission.");
     }
+    if (activeCode && activeApiBase) {
+      const recorded = await fetch(
+        `${activeApiBase}/api/application-assistant/submitted`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ code: activeCode }),
+        },
+      );
+      const payload = await recorded.json();
+      if (!recorded.ok || !payload.ok) {
+        throw new Error(
+          payload?.error?.message ||
+            "The form was submitted, but Job Apply could not record it.",
+        );
+      }
+    }
     reviewStatus.textContent =
-      "Submission action sent. Verify the employer confirmation page.";
+      "Submission action sent and recorded. Verify the employer confirmation page.";
   } catch (error) {
     reviewStatus.textContent =
       error instanceof Error ? error.message : "Submission failed.";
@@ -136,6 +155,8 @@ fillButton.addEventListener("click", async () => {
       resume: payload.data.resume,
     });
     if (!applied?.ok) throw new Error("The page rejected the fill operation.");
+    activeCode = code;
+    activeApiBase = apiBase;
     status.textContent = `${applied.result.filled} fields filled; ${applied.result.unresolved} need review.`;
     reviewPanel.hidden = false;
     lastReviewAllowed = false;

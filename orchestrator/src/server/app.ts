@@ -165,12 +165,10 @@ export function createBasicAuthGuard() {
     const normalizedPath = path.split("?")[0] || path;
     if (
       normalizedMethod === "POST" &&
-      normalizedPath === "/api/visa-sponsors/search"
-    )
-      return true;
-    if (
-      normalizedMethod === "POST" &&
-      normalizedPath === "/api/application-assistant/fill"
+      [
+        "/api/application-assistant/fill",
+        "/api/application-assistant/submitted",
+      ].includes(normalizedPath)
     )
       return true;
     return false;

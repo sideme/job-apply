@@ -1,6 +1,5 @@
 import * as api from "@client/api";
 import { useProfile } from "@client/hooks/useProfile";
-import { _resetTracerReadinessCache } from "@client/hooks/useTracerReadiness";
 import { renderWithQueryClient } from "@client/test/renderWithQueryClient";
 import { createJob as createBaseJob } from "@shared/testing/factories.js";
 import type { Job } from "@shared/types.js";
@@ -15,7 +14,6 @@ vi.mock("@client/api", () => ({
   getResumeProjectsCatalog: vi.fn().mockResolvedValue([]),
   updateJob: vi.fn(),
   summarizeJob: vi.fn(),
-  getTracerReadiness: vi.fn(),
 }));
 
 vi.mock("@client/hooks/useProfile", () => ({
@@ -52,16 +50,6 @@ const ensureAccordionOpen = (name: string) => {
 describe("TailorMode", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    _resetTracerReadinessCache();
-    vi.mocked(api.getTracerReadiness).mockResolvedValue({
-      status: "ready",
-      canEnable: true,
-      publicBaseUrl: "https://my-jobops.example.com",
-      healthUrl: "https://my-jobops.example.com/health",
-      checkedAt: Date.now(),
-      lastSuccessAt: Date.now(),
-      reason: null,
-    });
     vi.mocked(useProfile).mockReturnValue({
       profile: {
         basics: {

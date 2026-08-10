@@ -13,6 +13,30 @@ import { getDataDir } from "../config/dataDir";
 
 export const LOCAL_RESUME_MAX_BYTES = 15 * 1024 * 1024;
 
+type MathWithSumPrecise = Math & {
+  sumPrecise?: (values: Iterable<number>) => number;
+};
+
+// PDF.js uses the newer Math.sumPrecise API, which is not available in the
+// Node 22 runtime used by the production image. A compensated sum is sufficient
+// for PDF.js's finite text-layout measurements and avoids degraded extraction.
+const runtimeMath = Math as MathWithSumPrecise;
+if (typeof runtimeMath.sumPrecise !== "function") {
+  runtimeMath.sumPrecise = (values: Iterable<number>): number => {
+    let sum = 0;
+    let correction = 0;
+    for (const value of values) {
+      const next = sum + value;
+      correction +=
+        Math.abs(sum) >= Math.abs(value)
+          ? sum - next + value
+          : value - next + sum;
+      sum = next;
+    }
+    return sum + correction;
+  };
+}
+
 export type LocalResumeStatus = {
   configured: boolean;
   filename: string;

@@ -201,7 +201,6 @@ vi.mock("./orchestrator/OrchestratorFilters", () => ({
     onTabChange,
     onOpenCommandBar,
     onSourceFilterChange,
-    onSponsorFilterChange,
     onSalaryFilterChange,
     onResetFilters,
     onSortChange,
@@ -211,7 +210,6 @@ vi.mock("./orchestrator/OrchestratorFilters", () => ({
     onTabChange: (t: FilterTab) => void;
     onOpenCommandBar: () => void;
     onSourceFilterChange: (source: string) => void;
-    onSponsorFilterChange: (value: string) => void;
     onSalaryFilterChange: (value: {
       mode: "at_least" | "at_most" | "between";
       min: number | null;
@@ -239,9 +237,6 @@ vi.mock("./orchestrator/OrchestratorFilters", () => ({
       </button>
       <button type="button" onClick={() => onSourceFilterChange("linkedin")}>
         Set Source
-      </button>
-      <button type="button" onClick={() => onSponsorFilterChange("confirmed")}>
-        Set Sponsor
       </button>
       <button
         type="button"
@@ -614,7 +609,7 @@ describe("OrchestratorPage", () => {
     );
   });
 
-  it("syncs source, sponsor, and salary range filters to URL and resets them", () => {
+  it("syncs source and salary range filters to URL and resets them", () => {
     window.matchMedia = createMatchMedia(
       true,
     ) as unknown as typeof window.matchMedia;
@@ -632,11 +627,6 @@ describe("OrchestratorPage", () => {
     fireEvent.click(screen.getByText("Set Source"));
     expect(screen.getByTestId("location").textContent).toContain(
       "source=linkedin",
-    );
-
-    fireEvent.click(screen.getByText("Set Sponsor"));
-    expect(screen.getByTestId("location").textContent).toContain(
-      "sponsor=confirmed",
     );
 
     fireEvent.click(screen.getByText("Set Salary Range"));

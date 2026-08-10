@@ -38,6 +38,16 @@ vi.mock("@server/repositories/jobs", () => ({
       status: "applied",
     },
   ]),
+  getJobById: vi.fn().mockResolvedValue({
+    id: "job-1",
+    employer: "Example Co",
+    title: "Software Engineer",
+  }),
+}));
+
+const notifyWhatsAppEvent = vi.fn().mockResolvedValue(undefined);
+vi.mock("@server/services/whatsapp", () => ({
+  notifyWhatsAppEvent,
 }));
 
 const getPostApplicationMessageByExternalId = vi.fn();
@@ -176,6 +186,8 @@ describe("gmail sync auto-log idempotency", () => {
           matchedJobId: "job-1",
           processingStatus: "auto_linked",
           stageTarget: "assessment",
+          messageType: "interview",
+          subject: "Interview update",
           receivedAt: Date.now(),
         },
         wasCreated: true,
@@ -188,6 +200,8 @@ describe("gmail sync auto-log idempotency", () => {
           matchedJobId: "job-1",
           processingStatus: "auto_linked",
           stageTarget: "assessment",
+          messageType: "interview",
+          subject: "Interview update",
           receivedAt: Date.now(),
         },
         wasCreated: false,
@@ -200,6 +214,14 @@ describe("gmail sync auto-log idempotency", () => {
 
     expect(upsertPostApplicationMessage).toHaveBeenCalledTimes(2);
     expect(transitionStage).toHaveBeenCalledTimes(1);
+    expect(notifyWhatsAppEvent).toHaveBeenCalledTimes(1);
+    expect(notifyWhatsAppEvent).toHaveBeenCalledWith(
+      "interview.received",
+      expect.objectContaining({
+        jobId: "job-1",
+        subject: "Interview update",
+      }),
+    );
     expect(llmCallJson).toHaveBeenCalledTimes(1);
   });
 });

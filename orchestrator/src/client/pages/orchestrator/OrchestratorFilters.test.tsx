@@ -2,7 +2,7 @@ import type { JobSource } from "@shared/types.js";
 import { fireEvent, render, screen } from "@testing-library/react";
 import type { ComponentProps } from "react";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import type { FilterTab, JobSort, SponsorFilter } from "./constants";
+import type { FilterTab, JobSort } from "./constants";
 import { OrchestratorFilters } from "./OrchestratorFilters";
 
 const originalScrollIntoView = HTMLElement.prototype.scrollIntoView;
@@ -36,8 +36,6 @@ const renderFilters = (
     onOpenCommandBar: vi.fn(),
     sourceFilter: "all" as const,
     onSourceFilterChange: vi.fn(),
-    sponsorFilter: "all" as SponsorFilter,
-    onSponsorFilterChange: vi.fn(),
     salaryFilter: {
       mode: "at_least" as const,
       min: null,

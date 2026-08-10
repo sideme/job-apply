@@ -25,6 +25,7 @@ import {
   resolveResumeProjectsSettings,
 } from "../services/resumeProjects";
 import { generateTailoring } from "../services/summary";
+import { notifyHighMatchJobs } from "../services/whatsapp";
 import { progressHelpers, resetProgress } from "./progress";
 import {
   discoverJobsStep,
@@ -139,6 +140,9 @@ export async function runPipeline(
       });
 
       ensureNotCancelled();
+      const highMatchThreshold = Math.max(80, mergedConfig.minSuitabilityScore);
+      await notifyHighMatchJobs(scoredJobs, highMatchThreshold);
+
       const jobsToProcess = selectJobsStep({
         scoredJobs,
         mergedConfig,

@@ -22,7 +22,6 @@ import type {
   JobSource,
   JobsListResponse,
   JobsRevisionResponse,
-  JobTracerLinksResponse,
   ManualJobDraft,
   ManualJobFetchResponse,
   ManualJobInferenceResponse,
@@ -40,14 +39,8 @@ import type {
   StageEvent,
   StageEventMetadata,
   StageTransitionTarget,
-  TracerAnalyticsResponse,
-  TracerReadinessResponse,
   ValidationResult,
-  VisaSponsor,
-  VisaSponsorSearchResponse,
-  VisaSponsorStatusResponse,
 } from "@shared/types";
-import { bucketQueryLength, trackProductEvent } from "@/lib/analytics";
 import { showDemoBlockedToast, showDemoSimulatedToast } from "@/lib/demo-toast";
 
 const API_BASE = "/api";
@@ -416,69 +409,6 @@ export async function updateJob(
   });
 }
 
-export async function getTracerAnalytics(options?: {
-  jobId?: string;
-  from?: number;
-  to?: number;
-  includeBots?: boolean;
-  limit?: number;
-}): Promise<TracerAnalyticsResponse> {
-  const params = new URLSearchParams();
-  if (options?.jobId) params.set("jobId", options.jobId);
-  if (typeof options?.from === "number") {
-    params.set("from", String(options.from));
-  }
-  if (typeof options?.to === "number") {
-    params.set("to", String(options.to));
-  }
-  if (typeof options?.includeBots === "boolean") {
-    params.set("includeBots", options.includeBots ? "1" : "0");
-  }
-  if (typeof options?.limit === "number") {
-    params.set("limit", String(options.limit));
-  }
-
-  const query = params.toString();
-  return fetchApi<TracerAnalyticsResponse>(
-    `/tracer-links/analytics${query ? `?${query}` : ""}`,
-  );
-}
-
-export async function getTracerReadiness(options?: {
-  force?: boolean;
-}): Promise<TracerReadinessResponse> {
-  const params = new URLSearchParams();
-  if (options?.force) params.set("force", "1");
-  const query = params.toString();
-  return fetchApi<TracerReadinessResponse>(
-    `/tracer-links/readiness${query ? `?${query}` : ""}`,
-  );
-}
-
-export async function getJobTracerLinks(
-  jobId: string,
-  options?: {
-    from?: number;
-    to?: number;
-    includeBots?: boolean;
-  },
-): Promise<JobTracerLinksResponse> {
-  const params = new URLSearchParams();
-  if (typeof options?.from === "number") {
-    params.set("from", String(options.from));
-  }
-  if (typeof options?.to === "number") {
-    params.set("to", String(options.to));
-  }
-  if (typeof options?.includeBots === "boolean") {
-    params.set("includeBots", options.includeBots ? "1" : "0");
-  }
-  const query = params.toString();
-  return fetchApi<JobTracerLinksResponse>(
-    `/tracer-links/jobs/${encodeURIComponent(jobId)}${query ? `?${query}` : ""}`,
-  );
-}
-
 async function streamSseEvents<TEvent>(
   endpoint: string,
   input: StreamSseInput,
@@ -805,12 +735,6 @@ export async function summarizeJob(
 
 export async function generateJobPdf(id: string): Promise<Job> {
   return fetchApi<Job>(`/jobs/${id}/generate-pdf`, {
-    method: "POST",
-  });
-}
-
-export async function checkSponsor(id: string): Promise<Job> {
-  return fetchApi<Job>(`/jobs/${id}/check-sponsor`, {
     method: "POST",
   });
 }
@@ -1400,54 +1324,6 @@ export async function deleteJobsBelowScore(threshold: number): Promise<{
     threshold: number;
   }>(`/jobs/score/${threshold}`, {
     method: "DELETE",
-  });
-}
-
-// Visa Sponsors API
-export async function getVisaSponsorStatus(): Promise<VisaSponsorStatusResponse> {
-  return fetchApi<VisaSponsorStatusResponse>("/visa-sponsors/status");
-}
-
-export async function searchVisaSponsors(input: {
-  query: string;
-  limit?: number;
-  minScore?: number;
-  country?: string;
-}): Promise<VisaSponsorSearchResponse> {
-  if (input.query?.trim()) {
-    trackProductEvent("visa_sponsor_search", {
-      query_length_bucket: bucketQueryLength(input.query.trim()),
-      limit: input.limit,
-      min_score: input.minScore,
-      country: input.country ?? "all",
-    });
-  }
-  return fetchApi<VisaSponsorSearchResponse>("/visa-sponsors/search", {
-    method: "POST",
-    body: JSON.stringify(input),
-  });
-}
-
-export async function getVisaSponsorOrganization(
-  name: string,
-  providerId?: string,
-): Promise<VisaSponsor[]> {
-  const params = new URLSearchParams();
-  if (providerId) params.set("providerId", providerId);
-  return fetchApi<VisaSponsor[]>(
-    `/visa-sponsors/organization/${encodeURIComponent(name)}${params.size ? `?${params.toString()}` : ""}`,
-  );
-}
-
-export async function updateVisaSponsorList(): Promise<{
-  message: string;
-  status: VisaSponsorStatusResponse;
-}> {
-  return fetchApi<{
-    message: string;
-    status: VisaSponsorStatusResponse;
-  }>("/visa-sponsors/update", {
-    method: "POST",
   });
 }
 

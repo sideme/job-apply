@@ -93,34 +93,6 @@ type ProductEventMap = {
     provider: string;
     result: "success" | "error";
   };
-  tracer_filters_applied: {
-    include_bots: boolean;
-    has_from: boolean;
-    has_to: boolean;
-    date_range_days_bucket: string;
-  };
-  tracer_drilldown_opened: {
-    rank: number;
-    human_clicks_bucket: string;
-    total_clicks_bucket: string;
-  };
-  tracer_drilldown_mode_changed: {
-    mode: "human" | "all";
-  };
-  tracer_destination_copied: {
-    drilldown_mode: "human" | "all";
-    is_active_link: boolean;
-  };
-  tracer_external_link_opened: {
-    origin: "top_links" | "drilldown";
-    drilldown_mode: "human" | "all";
-  };
-  visa_sponsor_search: {
-    query_length_bucket: string;
-    limit?: number;
-    min_score?: number;
-    country?: string;
-  };
 };
 
 type ProductEventName = keyof ProductEventMap;

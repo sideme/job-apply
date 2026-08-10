@@ -51,29 +51,8 @@ services:
           target: /app/extractors/jobspy
           action: sync+restart
 
-  # Legacy WhatsApp webhook relay. Direct notifications can now be configured
-  # in Settings; enable this profile only for webhook-based deployments.
-  whatsapp-relay:
-    image: job-apply:latest
-    command: ["node", "/app/scripts/whatsapp-notify-relay.mjs"]
-    env_file:
-      - path: ./.env
-        required: false
-    environment:
-      - WHATSAPP_RELAY_PORT=8787
-    expose:
-      - "8787"
-    profiles: ["notifications"]
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://localhost:8787/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 5s
-
-  # Optional recurring discovery. It runs Indeed hourly and adds LinkedIn
-  # every three hours; adjust the intervals in .env as needed.
+  # Optional recurring discovery. It runs at 10:00, 12:00, 14:00, 16:00,
+  # and 18:00 on weekdays in the configured timezone.
   pipeline-scheduler:
     image: job-apply:latest
     command: ["node", "/app/scripts/pipeline-scheduler.mjs"]

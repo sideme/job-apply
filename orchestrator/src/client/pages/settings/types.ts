@@ -32,7 +32,6 @@ export type WhatsAppValues = {
   phone: EffectiveDefault<string>;
   apiKeyHint: string | null;
 };
-export type DisplayValues = EffectiveDefault<boolean>;
 export type ChatValues = {
   tone: EffectiveDefault<string>;
   formality: EffectiveDefault<string>;

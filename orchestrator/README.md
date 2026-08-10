@@ -143,18 +143,10 @@ action.
 
 ### WhatsApp notifications (optional)
 
-The optional relay forwards the existing Job Complete webhook to WhatsApp via
-CallMeBot. Add `CALLMEBOT_PHONE`, `CALLMEBOT_API_KEY`, and
-`WHATSAPP_RELAY_SECRET` (or `WEBHOOK_SECRET`) to `.env`, then start it with:
-
-```bash
-docker compose --profile notifications up -d
-```
-
-Set **Job Complete Webhook URL** in Settings to
-`http://whatsapp-relay:8787`. The relay accepts only authenticated requests and
-is not exposed on the host network. It forwards a minimal job-completed event;
-it does not send your resume or application answers.
+Configure WhatsApp directly in **Settings → Notifications & Webhooks** with a
+CallMeBot phone number and API key, save, and send a test notification. The
+server sends minimal event summaries and never sends your resume, application
+answers, or email body.
 
 3. **Track responses (optional):**
    - Connect Gmail in Tracking Inbox settings

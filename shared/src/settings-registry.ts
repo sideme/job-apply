@@ -299,13 +299,6 @@ export const settingsRegistry = {
     serialize: (value: string | null | undefined): string | null =>
       value ?? null,
   },
-  showSponsorInfo: {
-    kind: "typed" as const,
-    schema: z.boolean(),
-    default: (): boolean => true,
-    parse: parseBitBoolOrNull,
-    serialize: serializeBitBool,
-  },
   chatStyleTone: {
     kind: "typed" as const,
     schema: z.string().trim().max(100),

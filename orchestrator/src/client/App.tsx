@@ -61,8 +61,6 @@ const REDIRECTS: Array<{ from: string; to: string }> = [
   { from: "/jobs/in_progress/:jobId", to: "/applications/in-progress" },
   { from: "/all", to: "/jobs/all" },
   { from: "/all/:jobId", to: "/jobs/all/:jobId" },
-  { from: "/tracer-links", to: "/settings" },
-  { from: "/visa-sponsors", to: "/settings" },
 ];
 
 const DEMO_WAITLIST_BANNER_DISMISSED_KEY = "jobops.demoWaitlistBannerDismissed";

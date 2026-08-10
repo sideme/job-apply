@@ -35,8 +35,6 @@ export const OrchestratorPage: React.FC = () => {
     setSearchQuery,
     sourceFilter,
     setSourceFilter,
-    sponsorFilter,
-    setSponsorFilter,
     salaryFilter,
     setSalaryFilter,
     sort,
@@ -152,7 +150,6 @@ export const OrchestratorPage: React.FC = () => {
     jobs,
     activeTab,
     sourceFilter,
-    sponsorFilter,
     salaryFilter,
     sort,
   );
@@ -374,8 +371,6 @@ export const OrchestratorPage: React.FC = () => {
             onFiltersOpenChange={setIsFiltersOpen}
             sourceFilter={sourceFilter}
             onSourceFilterChange={setSourceFilter}
-            sponsorFilter={sponsorFilter}
-            onSponsorFilterChange={setSponsorFilter}
             salaryFilter={salaryFilter}
             onSalaryFilterChange={setSalaryFilter}
             sourcesWithJobs={sourcesWithJobs}

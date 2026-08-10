@@ -1,5 +1,5 @@
 import { logger } from "@infra/logger";
-import { getAllJobs } from "@server/repositories/jobs";
+import { getAllJobs, getJobById } from "@server/repositories/jobs";
 import {
   getPostApplicationIntegration,
   updatePostApplicationIntegrationSyncState,
@@ -15,7 +15,11 @@ import {
 } from "@server/repositories/post-application-sync-runs";
 import { transitionStage } from "@server/services/applicationTracking";
 import { resolveStageTransitionForTarget } from "@server/services/post-application/stage-target";
-import type { PostApplicationRouterStageTarget } from "@shared/types";
+import { notifyWhatsAppEvent } from "@server/services/whatsapp";
+import type {
+  PostApplicationMessageType,
+  PostApplicationRouterStageTarget,
+} from "@shared/types";
 import { classifyWithSmartRouter, minifyActiveJobs } from "./email-router";
 import type { GmailCredentials } from "./gmail-api";
 import {
@@ -122,6 +126,8 @@ async function createAutoStageEvent(args: {
   stageTarget: PostApplicationRouterStageTarget;
   receivedAt: number;
   note: string;
+  messageType: PostApplicationMessageType | null;
+  subject: string;
 }): Promise<void> {
   const transition = resolveStageTransitionForTarget(args.stageTarget);
   if (transition.toStage === "no_change") return;
@@ -144,6 +150,18 @@ async function createAutoStageEvent(args: {
     },
     transition.outcome,
   );
+
+  if (args.messageType === "interview") {
+    const job = await getJobById(args.jobId);
+    if (job) {
+      await notifyWhatsAppEvent("interview.received", {
+        jobId: job.id,
+        title: job.title,
+        employer: job.employer,
+        subject: args.subject,
+      });
+    }
+  }
 }
 
 async function runWithConcurrency<T>(
@@ -303,6 +321,8 @@ export async function runGmailIngestionSync(args: {
               stageTarget: savedMessage.stageTarget ?? "no_change",
               receivedAt: savedMessage.receivedAt,
               note: "Auto-created from Smart Router.",
+              messageType: savedMessage.messageType,
+              subject: savedMessage.subject,
             });
           }
           return;
@@ -381,6 +401,8 @@ export async function runGmailIngestionSync(args: {
             stageTarget: savedMessage.stageTarget ?? "no_change",
             receivedAt: savedMessage.receivedAt,
             note: "Auto-created from Smart Router.",
+            messageType: savedMessage.messageType,
+            subject: savedMessage.subject,
           });
         }
       } catch (error) {

@@ -31,7 +31,6 @@ import type {
   JobSort,
   SalaryFilter,
   SalaryFilterMode,
-  SponsorFilter,
 } from "./constants";
 import { defaultSortDirection, orderedFilterSources, tabs } from "./constants";
 
@@ -42,8 +41,6 @@ interface OrchestratorFiltersProps {
   onOpenCommandBar: () => void;
   sourceFilter: JobSource | "all";
   onSourceFilterChange: (value: JobSource | "all") => void;
-  sponsorFilter: SponsorFilter;
-  onSponsorFilterChange: (value: SponsorFilter) => void;
   salaryFilter: SalaryFilter;
   onSalaryFilterChange: (value: SalaryFilter) => void;
   sourcesWithJobs: JobSource[];

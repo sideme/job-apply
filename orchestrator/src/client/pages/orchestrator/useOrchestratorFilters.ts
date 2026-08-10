@@ -1,21 +1,9 @@
 import type { JobSource } from "@shared/types.js";
 import { useCallback, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
-import type {
-  JobSort,
-  SalaryFilter,
-  SalaryFilterMode,
-  SponsorFilter,
-} from "./constants";
+import type { JobSort, SalaryFilter, SalaryFilterMode } from "./constants";
 import { DEFAULT_SORT } from "./constants";
 
-const allowedSponsorFilters: SponsorFilter[] = [
-  "all",
-  "confirmed",
-  "potential",
-  "not_found",
-  "unknown",
-];
 const allowedSalaryModes: SalaryFilterMode[] = [
   "at_least",
   "at_most",
@@ -57,27 +45,6 @@ export const useOrchestratorFilters = () => {
         (prev) => {
           if (source !== "all") prev.set("source", source);
           else prev.delete("source");
-          return prev;
-        },
-        { replace: true },
-      );
-    },
-    [setSearchParams],
-  );
-
-  const sponsorFilter = useMemo((): SponsorFilter => {
-    const raw = searchParams.get("sponsor") ?? "all";
-    return allowedSponsorFilters.includes(raw as SponsorFilter)
-      ? (raw as SponsorFilter)
-      : "all";
-  }, [searchParams]);
-
-  const setSponsorFilter = useCallback(
-    (value: SponsorFilter) => {
-      setSearchParams(
-        (prev) => {
-          if (value === "all") prev.delete("sponsor");
-          else prev.set("sponsor", value);
           return prev;
         },
         { replace: true },
@@ -169,7 +136,6 @@ export const useOrchestratorFilters = () => {
       (prev) => {
         prev.delete("source");
         prev.delete("q");
-        prev.delete("sponsor");
         prev.delete("salaryMode");
         prev.delete("salaryMin");
         prev.delete("salaryMax");
@@ -187,8 +153,6 @@ export const useOrchestratorFilters = () => {
     setSearchQuery,
     sourceFilter,
     setSourceFilter,
-    sponsorFilter,
-    setSponsorFilter,
     salaryFilter,
     setSalaryFilter,
     sort,

@@ -5,7 +5,11 @@ vi.mock("@server/repositories/settings", () => ({
 }));
 
 import * as settingsRepo from "@server/repositories/settings";
-import { formatWhatsAppEvent, sendWhatsAppMessage } from "./whatsapp";
+import {
+  formatWhatsAppEvent,
+  notifyHighMatchJobs,
+  sendWhatsAppMessage,
+} from "./whatsapp";
 
 describe("WhatsApp notifications", () => {
   const originalFetch = global.fetch;
@@ -48,5 +52,59 @@ describe("WhatsApp notifications", () => {
         jobsProcessed: 3,
       }),
     ).toContain("12 new jobs, 3 prepared");
+  });
+
+  it("summarizes only jobs at or above the high-match threshold", async () => {
+    await notifyHighMatchJobs(
+      [
+        {
+          id: "high",
+          title: "Senior Backend Engineer",
+          employer: "Acme",
+          suitabilityScore: 92,
+          applicationLink: "https://jobs.example.com/high",
+          jobUrlDirect: null,
+          jobUrl: "https://example.com/high",
+        },
+        {
+          id: "low",
+          title: "Junior Engineer",
+          employer: "Acme",
+          suitabilityScore: 65,
+          applicationLink: null,
+          jobUrlDirect: null,
+          jobUrl: "https://example.com/low",
+        },
+      ],
+      80,
+    );
+
+    expect(global.fetch).toHaveBeenCalledOnce();
+    const requestUrl = new URL(
+      String(vi.mocked(global.fetch).mock.calls[0]?.[0]),
+    );
+    expect(requestUrl.searchParams.get("text")).toContain(
+      "Senior Backend Engineer",
+    );
+    expect(requestUrl.searchParams.get("text")).not.toContain(
+      "Junior Engineer",
+    );
+  });
+
+  it("formats submission and interview messages without email bodies", () => {
+    expect(
+      formatWhatsAppEvent("application.submitted", {
+        title: "Platform Engineer",
+        employer: "Example Co",
+      }),
+    ).toContain("application submitted");
+    expect(
+      formatWhatsAppEvent("interview.received", {
+        title: "Platform Engineer",
+        employer: "Example Co",
+        subject: "Interview invitation",
+        body: "private email body",
+      }),
+    ).not.toContain("private email body");
   });
 });

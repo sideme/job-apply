@@ -161,9 +161,6 @@ export interface Job {
   tailoredSkills: string | null; // Generated resume skills (JSON)
   selectedProjectIds: string | null; // Comma-separated IDs of selected projects
   pdfPath: string | null; // Path to generated PDF
-  tracerLinksEnabled: boolean; // Rewrite outbound resume links to tracer links on next PDF generation
-  sponsorMatchScore: number | null; // 0-100 fuzzy match score with visa sponsors
-  sponsorMatchNames: string | null; // JSON array of matched sponsor names (when 100% matches or top match)
 
   // JobSpy fields (nullable for non-JobSpy sources)
   jobType: string | null;
@@ -215,7 +212,6 @@ export type JobListItem = Pick<
   | "outcome"
   | "closedAt"
   | "suitabilityScore"
-  | "sponsorMatchScore"
   | "jobType"
   | "jobFunction"
   | "salaryMinAmount"
@@ -333,8 +329,5 @@ export interface UpdateJobInput {
   tailoredSkills?: string;
   selectedProjectIds?: string;
   pdfPath?: string;
-  tracerLinksEnabled?: boolean;
   appliedAt?: string;
-  sponsorMatchScore?: number;
-  sponsorMatchNames?: string;
 }
