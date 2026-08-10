@@ -1,6 +1,6 @@
 import * as api from "@client/api";
 import { subscribeToEventSource } from "@client/lib/sse";
-import type { Job, JobListItem, JobStatus } from "@shared/types";
+import type { Job, JobLevel, JobListItem, JobStatus } from "@shared/types";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -19,6 +19,7 @@ const initialStats: Record<JobStatus, number> = {
 const isDocumentVisible = () =>
   typeof document === "undefined" || document.visibilityState === "visible";
 const JOBS_PAGE_SIZE = 60;
+const EMPTY_JOB_LEVELS: JobLevel[] = [];
 
 const statusesForTab = (tab: "ready" | "discovered" | "applied" | "all") => {
   if (tab === "ready") return ["ready", "processing"];
@@ -92,6 +93,7 @@ export const useOrchestratorData = (
   selectedJobId: string | null,
   searchQuery = "",
   activeTab: "ready" | "discovered" | "applied" | "all" = "all",
+  jobLevels: JobLevel[] = EMPTY_JOB_LEVELS,
 ) => {
   const queryClient = useQueryClient();
   const [jobListItems, setJobListItems] = useState<JobListItem[]>([]);
@@ -228,6 +230,7 @@ export const useOrchestratorData = (
         view: "list",
         statuses: statusesForTab(activeTab),
         ...(normalizedSearchQuery ? { search: normalizedSearchQuery } : {}),
+        ...(jobLevels.length ? { jobLevels } : {}),
         limit: JOBS_PAGE_SIZE,
         offset: 0,
       });
@@ -254,7 +257,7 @@ export const useOrchestratorData = (
         setIsLoading(false);
       }
     }
-  }, [activeTab, normalizedSearchQuery, queryClient]);
+  }, [activeTab, jobLevels, normalizedSearchQuery, queryClient]);
 
   const loadMoreJobs = useCallback(async () => {
     if (isLoadingMore || !hasMoreJobs) return;
@@ -264,6 +267,7 @@ export const useOrchestratorData = (
         view: "list",
         statuses: statusesForTab(activeTab),
         ...(normalizedSearchQuery ? { search: normalizedSearchQuery } : {}),
+        ...(jobLevels.length ? { jobLevels } : {}),
         limit: JOBS_PAGE_SIZE,
         offset: loadedJobsCountRef.current,
       });
@@ -290,7 +294,7 @@ export const useOrchestratorData = (
     } finally {
       setIsLoadingMore(false);
     }
-  }, [activeTab, hasMoreJobs, isLoadingMore, normalizedSearchQuery]);
+  }, [activeTab, hasMoreJobs, isLoadingMore, jobLevels, normalizedSearchQuery]);
 
   const checkPipelineStatus = useCallback(async () => {
     try {
@@ -342,6 +346,7 @@ export const useOrchestratorData = (
           api.getJobsRevision({
             statuses: statusesForTab(activeTab),
             ...(normalizedSearchQuery ? { search: normalizedSearchQuery } : {}),
+            ...(jobLevels.length ? { jobLevels } : {}),
           }),
         staleTime: 0,
       });
@@ -362,6 +367,7 @@ export const useOrchestratorData = (
   }, [
     activeTab,
     isRefreshPaused,
+    jobLevels,
     loadJobs,
     normalizedSearchQuery,
     queryClient,

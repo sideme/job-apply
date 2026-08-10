@@ -41,7 +41,7 @@ orchestrator/
    OpenRouter is the default LLM provider, but OpenAI, LM Studio, Ollama, `openai-compatible` endpoints, Gemini, DeepSeek, and Qwen are also supported.
 
    Use `LLM_API_KEY` / `llmApiKey` to configure providers that require an API key.
-   The API key is optional during initial setup. In the default hybrid flow, job discovery, keyword-based scoring, and configured application answers can run without a cloud LLM key; adding a key later enables semantic scoring and resume tailoring.
+   The API key is optional during initial setup. In the default hybrid flow, job discovery, rule-based ATS scoring, and configured application answers run without a cloud LLM key. A dedicated embedding key can optionally add a bounded semantic signal; a chat key enables manual deep analysis and resume tailoring.
    To use the native OpenAI integration, set `LLM_PROVIDER=openai`.
    For third-party services that expose an OpenAI-style API but are not OpenAI itself, use `LLM_PROVIDER=openai-compatible`.
    DeepSeek uses `LLM_PROVIDER=deepseek` with `https://api.deepseek.com`; Qwen uses `LLM_PROVIDER=qwen` with Alibaba Cloud Model Studio's compatible endpoint. Both use `LLM_API_KEY`.
@@ -72,7 +72,7 @@ orchestrator/
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/api/jobs` | List jobs (filter with `?status=ready,discovered`; search with `?q=backend`, which returns the latest 100 matches) |
+| GET | `/api/jobs` | List jobs (filter with `?status=ready,discovered` and multi-level `?level=entry_level,senior`; search with `?q=backend`; paginate with `limit` and `offset`) |
 | GET | `/api/jobs/:id` | Get single job |
 | PATCH | `/api/jobs/:id` | Update job |
 | POST | `/api/jobs/actions` | Run job actions (`move_to_ready`, `rescore`, `skip`) for one or many jobs |
@@ -103,9 +103,9 @@ orchestrator/
 ## Daily Flow
 
 1. **Discover fresh jobs:**
-   - In **Run Jobs**, set keywords, country, and cities, then search Indeed, LinkedIn, Glassdoor, and optionally Adzuna.
-   - Discovery and keyword-based scoring work without an LLM API key.
-   - To run recurring searches, start the optional scheduler with `docker compose --profile scheduler up -d`. It runs Indeed/Glassdoor hourly and LinkedIn every three hours by default.
+   - In **Run Jobs**, set keywords, country, and cities, then search Indeed, LinkedIn, and optionally Adzuna.
+   - Discovery and conservative ATS scoring work without an LLM API key. Automatic runs score only jobs newly inserted by that run.
+   - To run recurring searches, start the optional scheduler with `docker compose --profile scheduler up -d`. It runs at 10:00, 12:00, 14:00, 16:00, and 18:00 on weekdays in the configured timezone.
 
 2. **You review in the UI:**
    - See jobs at `http://localhost:3005`

@@ -19,8 +19,10 @@ describe("detectSkills", () => {
     expect(detectSkills("passionate team player").size).toBe(0);
   });
 
-  it("includes every canonical key among its aliases", () => {
+  it("includes unambiguous canonical keys among their aliases", () => {
+    const intentionallyQualified = new Set(["go", "rest", "spring", "vue"]);
     for (const [canonical, aliases] of Object.entries(SKILLS_DICTIONARY)) {
+      if (intentionallyQualified.has(canonical)) continue;
       expect(aliases).toContain(canonical);
     }
   });

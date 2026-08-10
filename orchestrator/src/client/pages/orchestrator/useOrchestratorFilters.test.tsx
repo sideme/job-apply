@@ -39,6 +39,28 @@ describe("useOrchestratorFilters", () => {
     });
   });
 
+  it("parses, updates, and resets the job level query parameter", () => {
+    const { result } = renderHook(() => useOrchestratorFilters(), {
+      wrapper: createWrapper("/ready?level=senior,entry_level"),
+    });
+
+    expect(result.current.jobLevelFilters).toEqual(["entry_level", "senior"]);
+
+    act(() => result.current.setJobLevelFilters(["lead", "senior"]));
+    expect(result.current.jobLevelFilters).toEqual(["senior", "lead"]);
+
+    act(() => result.current.resetFilters());
+    expect(result.current.jobLevelFilters).toEqual([]);
+  });
+
+  it("ignores an invalid job level query parameter", () => {
+    const { result } = renderHook(() => useOrchestratorFilters(), {
+      wrapper: createWrapper("/ready?level=wizard"),
+    });
+
+    expect(result.current.jobLevelFilters).toEqual([]);
+  });
+
   it("falls back to default sort for invalid sort query params", () => {
     const cases = [
       "/ready?sort=title",

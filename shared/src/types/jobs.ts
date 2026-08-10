@@ -1,4 +1,5 @@
 import type { ExtractorSourceId } from "../extractors";
+import type { JobLevel } from "../job-level";
 
 export type JobStatus =
   | "discovered" // Crawled but not processed
@@ -147,7 +148,7 @@ export interface Job {
   status: JobStatus;
   outcome: JobOutcome | null;
   closedAt: number | null;
-  suitabilityScore: number | null; // 0-100 AI-generated score
+  suitabilityScore: number | null; // 0-95 conservative job-fit estimate
   suitabilityReason: string | null; // AI explanation
   suitabilityReasonSource: "local" | "llm" | null;
   semanticScore: number | null;
@@ -171,6 +172,7 @@ export interface Job {
   salaryCurrency: string | null;
   isRemote: boolean | null;
   jobLevel: string | null;
+  jobLevelCategory: JobLevel | null;
   jobFunction: string | null;
   listingType: string | null;
   emails: string | null;
@@ -225,6 +227,7 @@ export type JobListItem = Pick<
     Pick<
       Job,
       | "semanticScore"
+      | "jobLevelCategory"
       | "keywordCoverage"
       | "keywordMissing"
       | "suitabilityReasonSource"
@@ -311,6 +314,7 @@ export interface UpdateJobInput {
   location?: string | null;
   salary?: string | null;
   deadline?: string | null;
+  jobLevel?: string | null;
   status?: JobStatus;
   outcome?: JobOutcome | null;
   closedAt?: number | null;

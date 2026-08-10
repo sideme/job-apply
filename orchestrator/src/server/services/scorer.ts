@@ -28,7 +28,7 @@ const SCORING_SCHEMA: JsonSchemaDefinition = {
     properties: {
       score: {
         type: "integer",
-        description: "Suitability score from 0 to 100",
+        description: "Conservative ATS suitability score from 0 to 95",
       },
       reason: {
         type: "string",
@@ -157,7 +157,7 @@ export async function scoreJobSuitability(
     });
   }
 
-  const clampedScore = Math.min(100, Math.max(0, Math.round(score)));
+  const clampedScore = Math.min(95, Math.max(0, Math.round(score)));
   const clampedReason = reason || "No explanation provided";
 
   // Apply salary penalty if enabled
@@ -277,14 +277,23 @@ function buildScoringPrompt(
   profile: Record<string, unknown>,
   preferences: ScoringPreferences,
 ): string {
-  return `You are evaluating a job listing for a candidate. Score how suitable this job is for the candidate on a scale of 0-100.
+  return `You are evaluating a job listing for a candidate. Produce a conservative ATS-style match score from 0-95. Never return 100.
 
 SCORING CRITERIA:
-- Skills match (technologies, frameworks, languages): 0-30 points
-- Experience level match: 0-25 points
-- Location/remote work alignment: 0-15 points
-- Industry/domain fit: 0-15 points
-- Career growth potential: 0-15 points
+- Required skills and keyword evidence: 0-45 points
+- Role/title alignment: 0-20 points
+- Seniority and stated experience requirements: 0-15 points
+- Education and required qualifications: 0-10 points
+- Semantic/domain alignment: 0-10 points
+
+CALIBRATION:
+- 90-95: exceptional evidence for nearly every stated requirement
+- 80-89: strong match with only minor gaps
+- 65-79: useful partial match with meaningful gaps
+- 50-64: weak match or insufficient evidence
+- Below 50: major skill, role, seniority, or qualification mismatch
+- Do not infer qualifications that are absent from the resume.
+- Do not award a high score merely because a few generic keywords match.
 
 CANDIDATE PROFILE:
 ${JSON.stringify(profile, null, 2)}
@@ -310,7 +319,7 @@ ${
 IMPORTANT: Respond with ONLY a valid JSON object. No markdown, no code fences, no explanation outside the JSON.
 
 REQUIRED FORMAT (exactly this structure):
-{"score": <integer 0-100>, "reason": "<1-2 sentence explanation>"}
+{"score": <integer 0-95>, "reason": "<1-2 sentence explanation>"}
 
 EXAMPLE VALID RESPONSE:
 {"score": 75, "reason": "Strong skills match with React and TypeScript requirements, but position requires 3+ years experience."}`;
@@ -392,7 +401,7 @@ async function mockScore(
     if (jd.includes(kw) || title.includes(kw)) score -= 10;
   }
 
-  score = Math.min(100, Math.max(0, score));
+  score = Math.min(85, Math.max(0, score));
 
   const baseReason = "Scored using keyword matching (API key not configured)";
 

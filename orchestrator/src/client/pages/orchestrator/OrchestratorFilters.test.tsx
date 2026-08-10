@@ -36,6 +36,8 @@ const renderFilters = (
     onOpenCommandBar: vi.fn(),
     sourceFilter: "all" as const,
     onSourceFilterChange: vi.fn(),
+    jobLevelFilters: [],
+    onJobLevelFiltersChange: vi.fn(),
     salaryFilter: {
       mode: "at_least" as const,
       min: null,
@@ -74,6 +76,17 @@ describe("OrchestratorFilters", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: /linkedin/i }));
     expect(props.onSourceFilterChange).toHaveBeenCalledWith("linkedin");
+
+    fireEvent.click(
+      screen.getByRole("combobox", { name: "Job level filters" }),
+    );
+    fireEvent.change(
+      await screen.findByRole("combobox", { name: "Search job levels..." }),
+      { target: { value: "senior" } },
+    );
+    fireEvent.click(await screen.findByText("Senior"));
+    expect(props.onJobLevelFiltersChange).toHaveBeenCalledWith(["senior"]);
+    fireEvent.click(screen.getByRole("button", { name: "Done" }));
 
     expect(screen.queryByText("Sponsor status")).not.toBeInTheDocument();
 
@@ -116,6 +129,24 @@ describe("OrchestratorFilters", () => {
       key: "score",
       direction: "asc",
     });
+  });
+
+  it("adds another job level without replacing the existing selection", async () => {
+    const { props } = renderFilters({ jobLevelFilters: ["senior"] });
+    fireEvent.click(screen.getByRole("button", { name: /^filters/i }));
+    fireEvent.click(
+      screen.getByRole("combobox", { name: "Job level filters" }),
+    );
+    fireEvent.change(
+      await screen.findByRole("combobox", { name: "Search job levels..." }),
+      { target: { value: "lead" } },
+    );
+    fireEvent.click(await screen.findByText("Lead / Principal"));
+
+    expect(props.onJobLevelFiltersChange).toHaveBeenCalledWith([
+      "senior",
+      "lead",
+    ]);
   });
 
   it("resets filters and only shows sources present in jobs", async () => {

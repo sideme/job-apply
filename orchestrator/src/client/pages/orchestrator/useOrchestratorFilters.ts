@@ -1,4 +1,4 @@
-import type { JobSource } from "@shared/types.js";
+import { JOB_LEVELS, type JobLevel, type JobSource } from "@shared/types.js";
 import { useCallback, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 import type { JobSort, SalaryFilter, SalaryFilterMode } from "./constants";
@@ -45,6 +45,32 @@ export const useOrchestratorFilters = () => {
         (prev) => {
           if (source !== "all") prev.set("source", source);
           else prev.delete("source");
+          return prev;
+        },
+        { replace: true },
+      );
+    },
+    [setSearchParams],
+  );
+
+  const jobLevelFilters = useMemo((): JobLevel[] => {
+    const requested = new Set(
+      (searchParams.get("level") ?? "")
+        .split(",")
+        .map((level) => level.trim())
+        .filter((level) => JOB_LEVELS.includes(level as JobLevel)),
+    );
+    return JOB_LEVELS.filter((level) => requested.has(level));
+  }, [searchParams]);
+  const setJobLevelFilters = useCallback(
+    (levels: JobLevel[]) => {
+      setSearchParams(
+        (prev) => {
+          const normalized = JOB_LEVELS.filter((level) =>
+            levels.includes(level),
+          );
+          if (normalized.length === 0) prev.delete("level");
+          else prev.set("level", normalized.join(","));
           return prev;
         },
         { replace: true },
@@ -135,6 +161,7 @@ export const useOrchestratorFilters = () => {
     setSearchParams(
       (prev) => {
         prev.delete("source");
+        prev.delete("level");
         prev.delete("q");
         prev.delete("salaryMode");
         prev.delete("salaryMin");
@@ -153,6 +180,8 @@ export const useOrchestratorFilters = () => {
     setSearchQuery,
     sourceFilter,
     setSourceFilter,
+    jobLevelFilters,
+    setJobLevelFilters,
     salaryFilter,
     setSalaryFilter,
     sort,

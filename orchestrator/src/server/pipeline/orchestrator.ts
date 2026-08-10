@@ -119,7 +119,9 @@ export async function runPipeline(
       });
 
       ensureNotCancelled();
-      const { created } = await importJobsStep({ discoveredJobs });
+      const { created, createdJobIds } = await importJobsStep({
+        discoveredJobs,
+      });
       jobsDiscovered = created;
 
       ensureNotCancelled();
@@ -136,6 +138,7 @@ export async function runPipeline(
       ensureNotCancelled();
       const { unprocessedJobs, scoredJobs } = await scoreJobsStep({
         profile,
+        jobIds: createdJobIds,
         shouldCancel: () => cancelRequestedAt !== null,
       });
 

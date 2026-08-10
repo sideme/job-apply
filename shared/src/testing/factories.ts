@@ -51,6 +51,7 @@ export const createJob = (overrides: Partial<Job> = {}): Job => ({
   salaryCurrency: null,
   isRemote: null,
   jobLevel: null,
+  jobLevelCategory: null,
   jobFunction: null,
   listingType: null,
   emails: null,

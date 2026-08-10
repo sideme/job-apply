@@ -4,6 +4,7 @@
 
 import { existsSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { inferJobLevel } from "@shared/job-level";
 import Database from "better-sqlite3";
 import { getDataDir } from "../config/dataDir";
 import { buildDuplicateAssignments } from "../services/job-deduplication";
@@ -52,6 +53,7 @@ const migrations = [
     salary_currency TEXT,
     is_remote INTEGER,
     job_level TEXT,
+    job_level_category TEXT,
     job_function TEXT,
     listing_type TEXT,
     emails TEXT,
@@ -305,6 +307,7 @@ const migrations = [
   `ALTER TABLE jobs ADD COLUMN salary_currency TEXT`,
   `ALTER TABLE jobs ADD COLUMN is_remote INTEGER`,
   `ALTER TABLE jobs ADD COLUMN job_level TEXT`,
+  `ALTER TABLE jobs ADD COLUMN job_level_category TEXT`,
   `ALTER TABLE jobs ADD COLUMN job_function TEXT`,
   `ALTER TABLE jobs ADD COLUMN listing_type TEXT`,
   `ALTER TABLE jobs ADD COLUMN emails TEXT`,
@@ -408,6 +411,7 @@ const migrations = [
     salary_currency TEXT,
     is_remote INTEGER,
     job_level TEXT,
+    job_level_category TEXT,
     job_function TEXT,
     listing_type TEXT,
     emails TEXT,
@@ -462,7 +466,7 @@ const migrations = [
   )`,
         `INSERT OR REPLACE INTO jobs_new (
     id, source, source_job_id, job_url_direct, date_posted, date_posted_checked_at, job_type, salary_source, salary_interval,
-    salary_min_amount, salary_max_amount, salary_currency, is_remote, job_level, job_function, listing_type,
+    salary_min_amount, salary_max_amount, salary_currency, is_remote, job_level, job_level_category, job_function, listing_type,
     emails, company_industry, company_logo, company_url_direct, company_addresses, company_num_employees,
     company_revenue, company_description, skills, experience_range, company_rating, company_reviews_count,
     vacancy_count, work_from_home_type, title, employer, employer_url, job_url, application_link, disciplines,
@@ -475,7 +479,7 @@ const migrations = [
   )
   SELECT
     id, source, source_job_id, job_url_direct, date_posted, date_posted_checked_at, job_type, salary_source, salary_interval,
-    salary_min_amount, salary_max_amount, salary_currency, is_remote, job_level, job_function, listing_type,
+    salary_min_amount, salary_max_amount, salary_currency, is_remote, job_level, job_level_category, job_function, listing_type,
     emails, company_industry, company_logo, company_url_direct, company_addresses, company_num_employees,
     company_revenue, company_description, skills, experience_range, company_rating, company_reviews_count,
     vacancy_count, work_from_home_type, title, employer, employer_url, job_url, application_link, disciplines,
@@ -496,6 +500,7 @@ const migrations = [
   `CREATE INDEX IF NOT EXISTS idx_jobs_discovered_at ON jobs(discovered_at)`,
   `CREATE INDEX IF NOT EXISTS idx_jobs_status_discovered_at ON jobs(status, discovered_at)`,
   `CREATE INDEX IF NOT EXISTS idx_jobs_date_posted_score ON jobs(date_posted DESC, suitability_score DESC)`,
+  `CREATE INDEX IF NOT EXISTS idx_jobs_level_status_posted ON jobs(job_level_category, status, date_posted DESC)`,
   `CREATE VIRTUAL TABLE IF NOT EXISTS jobs_fts USING fts5(
     title,
     employer,
@@ -698,6 +703,33 @@ if (shouldInitializeJobsFts) {
   sqlite.exec("INSERT INTO jobs_fts(jobs_fts) VALUES('rebuild')");
   console.log("🔎 Jobs full-text search index initialized");
 }
+
+const jobLevelRows = sqlite
+  .prepare(
+    `SELECT id, job_level AS jobLevel, job_level_category AS jobLevelCategory, title
+     FROM jobs`,
+  )
+  .all() as Array<{
+  id: string;
+  jobLevel: string | null;
+  jobLevelCategory: string | null;
+  title: string;
+}>;
+const updateJobLevelCategory = sqlite.prepare(
+  "UPDATE jobs SET job_level_category = ? WHERE id = ?",
+);
+let normalizedJobLevels = 0;
+const normalizeJobLevels = sqlite.transaction(() => {
+  for (const row of jobLevelRows) {
+    const category = inferJobLevel(row.jobLevel, row.title);
+    if (category !== row.jobLevelCategory) {
+      updateJobLevelCategory.run(category, row.id);
+      normalizedJobLevels += 1;
+    }
+  }
+});
+normalizeJobLevels();
+console.log(`📊 Job levels normalized: ${normalizedJobLevels}`);
 
 const postingDateRows = sqlite
   .prepare(

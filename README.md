@@ -67,8 +67,12 @@ After filling, choose **Recheck page**. Submission remains blocked if the fill p
 
 ## Matching without per-job chat calls
 
-Job scoring works without an LLM chat key: it detects skills in the local PDF resume and each job description, then ranks by keyword coverage. Embedding scoring is off by default. If you explicitly enable it and configure a dedicated OpenAI-compatible embedding provider, base URL, model, and key in Settings → Models & AI, it combines semantic similarity (default 70%) with keyword coverage. It never inherits the chat-model key.
+Job scoring works without an LLM chat key. The conservative job-fit estimate combines ATS-inspired skill coverage, role/title alignment, seniority, qualifications, and evidence confidence, with a maximum score of 95. It is a personal ranking signal—not an employer ATS score or pass probability. A match on only one or two detected words cannot produce a perfect score. Automatic runs score only jobs newly inserted by that run; historical unscored jobs are left untouched, and optional LLM deep analysis remains a per-job manual action.
+
+Embedding scoring is off by default. If explicitly enabled with a dedicated OpenAI-compatible embedding provider, calibrated semantic similarity is supporting evidence only and cannot exceed 25% of the job-fit estimate. It never inherits the chat-model key.
 
 Resume vectors are cached by the exact truncated resume text and model. Job vectors are cached by the exact truncated job text and model, and survive application restarts. The defaults send at most 6,000 characters per document and permit at most 20 uncached job-vector API requests per automatic run. Cache hits do not count against that limit; excess uncached jobs use keyword-only scoring for that run. Changing the matching weight reuses the cached vectors and makes no new embedding request.
 
 Use **Recalculate match** for the inexpensive local recomputation. Use **Deep analysis** only for a job you are reviewing; it intentionally uses the configured chat LLM to write a richer rationale.
+
+Jobs can also be filtered by normalized level—such as Entry level, Senior, or Lead / Principal—from the searchable **Filters → Job level** control. See the [job-level and screening feature record](docs/features/job-level-and-screening-roadmap.md) for implementation history and planned ATS-related work.

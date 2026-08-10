@@ -1,4 +1,4 @@
-import type { JobListItem } from "@shared/types.js";
+import { formatJobLevel, type JobListItem } from "@shared/types.js";
 import { CalendarClock } from "lucide-react";
 import { cn, formatPostingDateTime } from "@/lib/utils";
 import { defaultStatusToken, statusTokens } from "./constants";
@@ -28,6 +28,7 @@ export const JobRowContent = ({
   const statusToken = statusTokens[job.status] ?? defaultStatusToken;
   const suitabilityTone = getSuitabilityScoreTone(job.suitabilityScore ?? 0);
   const datePosted = formatPostingDateTime(job.datePosted);
+  const jobLevel = formatJobLevel(job.jobLevelCategory);
 
   return (
     <div className={cn("flex min-w-0 flex-1 items-center gap-3", className)}>
@@ -55,6 +56,9 @@ export const JobRowContent = ({
           {job.employer}
           {job.location && (
             <span className="before:content-['_in_']">{job.location}</span>
+          )}
+          {jobLevel && (
+            <span className="before:content-['_·_']">{jobLevel}</span>
           )}
         </div>
         {datePosted && (

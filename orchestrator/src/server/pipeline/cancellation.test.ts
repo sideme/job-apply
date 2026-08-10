@@ -36,7 +36,11 @@ vi.mock("./steps", () => ({
         stepState.setResolver(resolve);
       }),
   ),
-  importJobsStep: vi.fn(async () => ({ created: 0, skipped: 0 })),
+  importJobsStep: vi.fn(async () => ({
+    created: 0,
+    skipped: 0,
+    createdJobIds: [],
+  })),
   scoreJobsStep: vi.fn(async () => ({ unprocessedJobs: [], scoredJobs: [] })),
   selectJobsStep: vi.fn(() => []),
   processJobsStep: vi.fn(async () => ({ processedCount: 0 })),

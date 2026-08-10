@@ -17,6 +17,7 @@ import type {
   JobChatMessage,
   JobChatStreamEvent,
   JobChatThread,
+  JobLevel,
   JobListItem,
   JobOutcome,
   JobSource,
@@ -351,6 +352,7 @@ export function getJobs(options: {
   statuses?: string[];
   view?: "list";
   search?: string;
+  jobLevels?: JobLevel[];
   limit?: number;
   offset?: number;
 }): Promise<JobsListResponse<JobListItem>>;
@@ -358,6 +360,7 @@ export function getJobs(options?: {
   statuses?: string[];
   view: "full";
   search?: string;
+  jobLevels?: JobLevel[];
   limit?: number;
   offset?: number;
 }): Promise<JobsListResponse<Job>>;
@@ -365,6 +368,7 @@ export async function getJobs(options?: {
   statuses?: string[];
   view?: "full" | "list";
   search?: string;
+  jobLevels?: JobLevel[];
   limit?: number;
   offset?: number;
 }): Promise<JobsListResponse<Job> | JobsListResponse<JobListItem>> {
@@ -373,6 +377,8 @@ export async function getJobs(options?: {
     params.set("status", options.statuses.join(","));
   if (options?.view) params.set("view", options.view);
   if (options?.search?.trim()) params.set("q", options.search.trim());
+  if (options?.jobLevels?.length)
+    params.set("level", options.jobLevels.join(","));
   if (options?.limit != null) params.set("limit", String(options.limit));
   if (options?.offset != null) params.set("offset", String(options.offset));
   const query = params.toString();
@@ -384,11 +390,14 @@ export async function getJobs(options?: {
 export async function getJobsRevision(options?: {
   statuses?: string[];
   search?: string;
+  jobLevels?: JobLevel[];
 }): Promise<JobsRevisionResponse> {
   const params = new URLSearchParams();
   if (options?.statuses?.length)
     params.set("status", options.statuses.join(","));
   if (options?.search?.trim()) params.set("q", options.search.trim());
+  if (options?.jobLevels?.length)
+    params.set("level", options.jobLevels.join(","));
   const query = params.toString();
   return fetchApi<JobsRevisionResponse>(
     `/jobs/revision${query ? `?${query}` : ""}`,

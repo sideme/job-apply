@@ -34,9 +34,10 @@ describe("scoreJobLocally", () => {
       embeddingConfig: config,
       semanticWeight: 0.7,
     });
-    expect(result.semanticScore).toBe(100);
+    expect(result.semanticScore).toBe(95);
     expect(result.keywordCoverage).toBe(50);
-    expect(result.total).toBe(85);
+    expect(result.total).toBeGreaterThan(30);
+    expect(result.total).toBeLessThanOrEqual(60);
     expect(result.keywordMissing).toEqual(["grpc", "kubernetes"]);
     expect(result.embeddingCacheHit).toBe(true);
     expect(result.embeddingApiRequest).toBe(false);
@@ -109,6 +110,7 @@ describe("scoreJobLocally", () => {
       semanticWeight: 0.7,
     });
     expect(result.semanticScore).toBeNull();
-    expect(result.total).toBe(100);
+    expect(result.total).toBe(60);
+    expect(result.reason).toContain("confidence cap 60");
   });
 });

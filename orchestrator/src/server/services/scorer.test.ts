@@ -416,6 +416,28 @@ describe("salary penalty", () => {
       expect(result.score).toBe(80); // No penalty
       expect(result.reason).not.toContain("missing salary");
     });
+
+    it("caps optional LLM ATS analysis at 95", async () => {
+      const { scoreJobSuitability } = await import("./scorer");
+      const { LlmService } = await import("./llm/service");
+
+      getEffectiveSettingsMock.mockResolvedValue({
+        penalizeMissingSalary: { value: false, default: false, override: null },
+        missingSalaryPenalty: { value: 10, default: 10, override: null },
+        scoringInstructions: { value: "", default: "", override: null },
+      } as any);
+      vi.spyOn(LlmService.prototype, "callJson").mockResolvedValue({
+        success: true,
+        data: { score: 100, reason: "Claims a perfect match" },
+      });
+
+      const result = await scoreJobSuitability(
+        createJob({ salary: "100000", title: "Software Engineer" }),
+        {},
+      );
+
+      expect(result.score).toBe(95);
+    });
   });
 
   describe("penalty application", () => {

@@ -86,7 +86,7 @@ describe("scoreJobsStep auto-skip behavior", () => {
 
     vi.mocked(settingsRepo.getSetting).mockResolvedValue("50");
 
-    await scoreJobsStep({ profile: {} });
+    await scoreJobsStep({ profile: {}, jobIds: ["job-1"] });
 
     expect(jobsRepo.updateJob).toHaveBeenCalledWith(
       "job-1",
@@ -123,7 +123,7 @@ describe("scoreJobsStep auto-skip behavior", () => {
       jobVectorModel: null,
     });
 
-    await scoreJobsStep({ profile: {} });
+    await scoreJobsStep({ profile: {}, jobIds: ["job-1"] });
 
     expect(jobsRepo.updateJob).toHaveBeenCalledWith(
       "job-1",
@@ -147,7 +147,7 @@ describe("scoreJobsStep auto-skip behavior", () => {
 
     vi.mocked(settingsRepo.getSetting).mockResolvedValue(null);
 
-    await scoreJobsStep({ profile: {} });
+    await scoreJobsStep({ profile: {}, jobIds: ["job-1"] });
 
     const updatePayload = vi.mocked(jobsRepo.updateJob).mock.calls[0][1] as {
       status?: string;
@@ -161,7 +161,7 @@ describe("scoreJobsStep auto-skip behavior", () => {
 
     vi.mocked(settingsRepo.getSetting).mockResolvedValue("not-a-number");
 
-    await scoreJobsStep({ profile: {} });
+    await scoreJobsStep({ profile: {}, jobIds: ["job-1"] });
 
     const updatePayload = vi.mocked(jobsRepo.updateJob).mock.calls[0][1] as {
       status?: string;
@@ -186,7 +186,7 @@ describe("scoreJobsStep auto-skip behavior", () => {
       }),
     ]);
 
-    await scoreJobsStep({ profile: {} });
+    await scoreJobsStep({ profile: {}, jobIds: ["job-applied"] });
 
     expect(jobsRepo.updateJob).toHaveBeenCalledWith(
       "job-applied",
@@ -244,12 +244,45 @@ describe("scoreJobsStep auto-skip behavior", () => {
         jobVectorModel: null,
       });
 
-    const result = await scoreJobsStep({ profile: {} });
+    const result = await scoreJobsStep({
+      profile: {},
+      jobIds: ["job-1", "job-2"],
+    });
 
     expect(result.scoredJobs).toHaveLength(2);
     expect(vi.mocked(jobsRepo.updateJob)).toHaveBeenCalledTimes(2);
     expect(vi.mocked(progressHelpers.scoringJob)).toHaveBeenCalledTimes(2);
     expect(vi.mocked(progressHelpers.scoringComplete)).toHaveBeenCalledWith(2);
+  });
+
+  it("queries only the newly imported job IDs supplied by the pipeline", async () => {
+    const jobsRepo = await import("@server/repositories/jobs");
+
+    await scoreJobsStep({ profile: {}, jobIds: ["job-1"] });
+
+    expect(jobsRepo.getUnscoredDiscoveredJobs).toHaveBeenCalledWith({
+      ids: ["job-1"],
+    });
+  });
+
+  it("does no scoring when the current pipeline run imported no jobs", async () => {
+    const jobsRepo = await import("@server/repositories/jobs");
+    const localScorer = await import("@server/services/scoring/local-scorer");
+    const embeddings = await import(
+      "@server/services/scoring/embedding-client"
+    );
+    const resumeVector = await import("@server/services/scoring/resume-vector");
+    vi.mocked(jobsRepo.getUnscoredDiscoveredJobs).mockResolvedValue([]);
+
+    const result = await scoreJobsStep({ profile: {}, jobIds: [] });
+
+    expect(jobsRepo.getUnscoredDiscoveredJobs).toHaveBeenCalledWith({
+      ids: [],
+    });
+    expect(localScorer.scoreJobLocally).not.toHaveBeenCalled();
+    expect(embeddings.resolveEmbeddingConfig).not.toHaveBeenCalled();
+    expect(resumeVector.getResumeVector).not.toHaveBeenCalled();
+    expect(result.scoredJobs).toEqual([]);
   });
 
   it("limits only API requests while allowing cache hits", async () => {
@@ -293,7 +326,10 @@ describe("scoreJobsStep auto-skip behavior", () => {
       };
     });
 
-    await scoreJobsStep({ profile: {} });
+    await scoreJobsStep({
+      profile: {},
+      jobIds: ["job-1", "job-cached", "job-limited"],
+    });
 
     expect(localScorer.scoreJobLocally).toHaveBeenCalledTimes(3);
     expect(logger.info).toHaveBeenCalledWith(
@@ -322,6 +358,7 @@ describe("scoreJobsStep auto-skip behavior", () => {
 
     const result = await scoreJobsStep({
       profile: {},
+      jobIds: ["job-1"],
       shouldCancel: () => true,
     });
 

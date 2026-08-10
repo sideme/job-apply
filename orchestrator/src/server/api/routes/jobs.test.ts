@@ -60,10 +60,37 @@ describe.sequential("Jobs API routes", () => {
       },
     ]);
 
-    expect(result).toEqual({ created: 1, skipped: 1 });
+    expect(result).toMatchObject({ created: 1, skipped: 1 });
+    expect(result.createdJobIds).toHaveLength(1);
     const listRes = await fetch(`${baseUrl}/api/jobs`);
     const listBody = await listRes.json();
     expect(listBody.data.total).toBe(1);
+  });
+
+  it("selects unscored jobs only from the current import IDs", async () => {
+    const { createJob, getUnscoredDiscoveredJobs } = await import(
+      "@server/repositories/jobs"
+    );
+    const historical = await createJob({
+      source: "indeed",
+      title: "Historical Role",
+      employer: "Old Corp",
+      jobUrl: "https://example.com/jobs/historical",
+    });
+    const newlyImported = await createJob({
+      source: "linkedin",
+      title: "New Role",
+      employer: "New Corp",
+      jobUrl: "https://example.com/jobs/new",
+    });
+
+    const selected = await getUnscoredDiscoveredJobs({
+      ids: [newlyImported.id],
+    });
+
+    expect(selected.map((job) => job.id)).toEqual([newlyImported.id]);
+    expect(selected.map((job) => job.id)).not.toContain(historical.id);
+    await expect(getUnscoredDiscoveredJobs({ ids: [] })).resolves.toEqual([]);
   });
 
   it("searches jobs server-side and returns the total match count", async () => {
@@ -144,6 +171,69 @@ describe.sequential("Jobs API routes", () => {
       hasMore: false,
     });
     expect(secondBody.data.jobs[0].id).not.toBe(firstBody.data.jobs[0].id);
+  });
+
+  it("normalizes and filters job levels server-side", async () => {
+    const { createJob } = await import("@server/repositories/jobs");
+    await createJob({
+      source: "manual",
+      title: "Platform Engineer",
+      employer: "Northwind",
+      jobLevel: "mid-senior level",
+      jobUrl: "https://example.com/job/level-explicit",
+    });
+    await createJob({
+      source: "manual",
+      title: "Junior Product Developer",
+      employer: "Contoso",
+      jobUrl: "https://example.com/job/level-inferred",
+    });
+    await createJob({
+      source: "manual",
+      title: "Software Engineer",
+      employer: "Fabrikam",
+      jobUrl: "https://example.com/job/level-unknown",
+    });
+
+    const seniorResponse = await fetch(
+      `${baseUrl}/api/jobs?view=list&level=senior`,
+    );
+    const seniorBody = await seniorResponse.json();
+    expect(seniorResponse.status).toBe(200);
+    expect(seniorBody.data.total).toBe(1);
+    expect(seniorBody.data.jobs[0]).toMatchObject({
+      employer: "Northwind",
+      jobLevelCategory: "senior",
+    });
+
+    const entryResponse = await fetch(
+      `${baseUrl}/api/jobs?view=list&level=entry_level`,
+    );
+    const entryBody = await entryResponse.json();
+    expect(entryBody.data.total).toBe(1);
+    expect(entryBody.data.jobs[0]).toMatchObject({
+      employer: "Contoso",
+      jobLevelCategory: "entry_level",
+    });
+
+    const combinedResponse = await fetch(
+      `${baseUrl}/api/jobs?view=list&level=senior,entry_level`,
+    );
+    const combinedBody = await combinedResponse.json();
+    expect(combinedBody.data.total).toBe(2);
+    expect(
+      combinedBody.data.jobs.map(
+        (job: { jobLevelCategory: string }) => job.jobLevelCategory,
+      ),
+    ).toEqual(expect.arrayContaining(["senior", "entry_level"]));
+  });
+
+  it("rejects invalid job level filters", async () => {
+    const response = await fetch(`${baseUrl}/api/jobs?level=senior,wizard`);
+    const body = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(body.error.code).toBe("INVALID_REQUEST");
   });
 
   it("supports lightweight and full jobs list views", async () => {

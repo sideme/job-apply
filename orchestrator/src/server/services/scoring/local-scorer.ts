@@ -1,4 +1,5 @@
 import { logger } from "@infra/logger";
+import { calculateAtsScore, calibrateSemanticSimilarity } from "./ats-rules";
 import type { EmbeddingConfig } from "./embedding-client";
 import {
   cosine,
@@ -27,6 +28,8 @@ export type LocalScore = {
 export async function scoreJobLocally(args: {
   jobId: string;
   jobText: string;
+  jobTitle?: string;
+  jobDescription?: string;
   resumeText: string;
   resumeVector: number[] | null;
   cachedJobVector: number[] | null;
@@ -68,8 +71,8 @@ export async function scoreJobLocally(args: {
         jobVector = vector;
         jobVectorModel = model;
         jobVectorHash = inputHash;
-        semanticScore = Math.round(
-          Math.min(1, Math.max(0, cosine(args.resumeVector, vector))) * 100,
+        semanticScore = calibrateSemanticSimilarity(
+          cosine(args.resumeVector, vector),
         );
       } else {
         embeddingLimitFallback = true;
@@ -83,32 +86,24 @@ export async function scoreJobLocally(args: {
     }
   }
 
-  const weight = Math.min(1, Math.max(0, args.semanticWeight));
-  const coverage = keyword.coverage;
-  const total =
-    semanticScore !== null && coverage !== null
-      ? Math.round(semanticScore * weight + coverage * (1 - weight))
-      : (semanticScore ?? coverage ?? 0);
-  const matched = keyword.jobSkills.length - keyword.missing.length;
-  const parts = [
-    semanticScore === null ? "Keyword-only" : `Semantic ${semanticScore}`,
-    coverage === null
-      ? null
-      : `keyword coverage ${coverage}% (${matched}/${keyword.jobSkills.length})`,
-    keyword.missing.length > 0
-      ? `Missing: ${keyword.missing.join(", ")}`
-      : null,
-    !args.resumeText
-      ? "No resume text extracted — upload a text-based PDF"
-      : null,
-  ].filter((part): part is string => Boolean(part));
+  const [derivedTitle, ...derivedDescription] = args.jobText.split("\n");
+  const ats = calculateAtsScore({
+    resumeText: args.resumeText,
+    jobTitle: args.jobTitle ?? derivedTitle ?? "",
+    jobDescription: args.jobDescription ?? derivedDescription.join("\n"),
+    keywordCoverage: keyword.coverage,
+    jobSkills: keyword.jobSkills,
+    missingSkills: keyword.missing,
+    semanticScore,
+    semanticWeight: args.semanticWeight,
+  });
 
   return {
-    total,
+    total: ats.total,
     semanticScore,
-    keywordCoverage: coverage,
+    keywordCoverage: keyword.coverage,
     keywordMissing: keyword.missing,
-    reason: parts.join(" · "),
+    reason: ats.reason,
     reasonSource: "local",
     jobVector,
     jobVectorModel,

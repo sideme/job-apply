@@ -3,9 +3,11 @@
  */
 
 import { randomUUID } from "node:crypto";
+import { inferJobLevel } from "@shared/job-level";
 import type {
   CreateJobInput,
   Job,
+  JobLevel,
   JobListItem,
   JobStatus,
   JobsRevisionResponse,
@@ -28,6 +30,11 @@ function normalizeSearch(search?: string): string | null {
   return normalized ? normalized : null;
 }
 
+function normalizeJobLevelFilter(jobLevels?: JobLevel[]): string | null {
+  if (!jobLevels || jobLevels.length === 0) return null;
+  return Array.from(new Set(jobLevels)).sort().join(",");
+}
+
 export function buildJobsFtsQuery(search?: string): string | null {
   const normalized = normalizeSearch(search);
   if (!normalized) return null;
@@ -48,14 +55,26 @@ function buildSearchClause(search?: string) {
   )`;
 }
 
-function buildJobsWhere(statuses?: JobStatus[], search?: string) {
+function buildJobsWhere(
+  statuses?: JobStatus[],
+  search?: string,
+  jobLevels?: JobLevel[],
+) {
   const statusClause =
     statuses && statuses.length > 0
       ? inArray(jobs.status, statuses)
       : undefined;
   const searchClause = buildSearchClause(search);
+  const jobLevelClause = jobLevels?.length
+    ? inArray(jobs.jobLevelCategory, jobLevels)
+    : undefined;
 
-  return and(isNull(jobs.duplicateOfJobId), statusClause, searchClause);
+  return and(
+    isNull(jobs.duplicateOfJobId),
+    statusClause,
+    searchClause,
+    jobLevelClause,
+  );
 }
 
 /**
@@ -66,8 +85,9 @@ export async function getAllJobs(
   search?: string,
   limit?: number,
   offset = 0,
+  jobLevels?: JobLevel[],
 ): Promise<Job[]> {
-  const whereClause = buildJobsWhere(statuses, search);
+  const whereClause = buildJobsWhere(statuses, search, jobLevels);
   const baseQuery = db.select().from(jobs);
   const filteredQuery = whereClause ? baseQuery.where(whereClause) : baseQuery;
   const orderedQuery = filteredQuery.orderBy(desc(jobs.discoveredAt));
@@ -88,6 +108,7 @@ export async function getJobListItems(
   search?: string,
   limit?: number,
   offset = 0,
+  jobLevels?: JobLevel[],
 ): Promise<JobListItem[]> {
   const selection = {
     id: jobs.id,
@@ -109,6 +130,7 @@ export async function getJobListItems(
     keywordMissing: jobs.keywordMissing,
     suitabilityReasonSource: jobs.suitabilityReasonSource,
     jobType: jobs.jobType,
+    jobLevelCategory: jobs.jobLevelCategory,
     jobFunction: jobs.jobFunction,
     salaryMinAmount: jobs.salaryMinAmount,
     salaryMaxAmount: jobs.salaryMaxAmount,
@@ -118,7 +140,7 @@ export async function getJobListItems(
     updatedAt: jobs.updatedAt,
   } as const;
 
-  const whereClause = buildJobsWhere(statuses, search);
+  const whereClause = buildJobsWhere(statuses, search, jobLevels);
   const baseQuery = db.select(selection).from(jobs);
   const filteredQuery = whereClause ? baseQuery.where(whereClause) : baseQuery;
   // Freshest posting first, then best match within the same post date.
@@ -147,9 +169,11 @@ export async function getJobListItems(
 export async function getJobsRevision(
   statuses?: JobStatus[],
   search?: string,
+  jobLevels?: JobLevel[],
 ): Promise<JobsRevisionResponse> {
   const statusFilter = normalizeStatusFilter(statuses);
-  const whereClause = buildJobsWhere(statuses, search);
+  const jobLevelFilter = normalizeJobLevelFilter(jobLevels);
+  const whereClause = buildJobsWhere(statuses, search, jobLevels);
 
   const baseQuery = db
     .select({
@@ -164,7 +188,7 @@ export async function getJobsRevision(
   const latestUpdatedAt = row?.latestUpdatedAt ?? null;
   const total = row?.total ?? 0;
   const normalizedSearch = normalizeSearch(search);
-  const revision = `${latestUpdatedAt ?? "none"}:${total}:${statusFilter ?? "all"}:${normalizedSearch ?? ""}`;
+  const revision = `${latestUpdatedAt ?? "none"}:${total}:${statusFilter ?? "all"}:${normalizedSearch ?? ""}:${jobLevelFilter ?? "all-levels"}`;
 
   return {
     revision,
@@ -177,8 +201,9 @@ export async function getJobsRevision(
 export async function getJobCount(
   statuses?: JobStatus[],
   search?: string,
+  jobLevels?: JobLevel[],
 ): Promise<number> {
-  const whereClause = buildJobsWhere(statuses, search);
+  const whereClause = buildJobsWhere(statuses, search, jobLevels);
   const baseQuery = db.select({ count: sql<number>`count(*)` }).from(jobs);
   const [row] = whereClause
     ? await baseQuery.where(whereClause)
@@ -261,6 +286,7 @@ async function insertJob(input: CreateJobInput): Promise<Job> {
     salaryCurrency: input.salaryCurrency ?? null,
     isRemote: input.isRemote ?? null,
     jobLevel: input.jobLevel ?? null,
+    jobLevelCategory: inferJobLevel(input.jobLevel, input.title),
     jobFunction: input.jobFunction ?? null,
     listingType: input.listingType ?? null,
     emails: input.emails ?? null,
@@ -310,10 +336,12 @@ async function tryInsertJob(input: CreateJobInput): Promise<Job | null> {
 export async function createJobs(input: CreateJobInput): Promise<Job>;
 export async function createJobs(
   inputs: CreateJobInput[],
-): Promise<{ created: number; skipped: number }>;
+): Promise<{ created: number; skipped: number; createdJobIds: string[] }>;
 export async function createJobs(
   inputOrInputs: CreateJobInput | CreateJobInput[],
-): Promise<Job | { created: number; skipped: number }> {
+): Promise<
+  Job | { created: number; skipped: number; createdJobIds: string[] }
+> {
   if (!Array.isArray(inputOrInputs)) {
     const inserted = await tryInsertJob(inputOrInputs);
     if (inserted) return inserted;
@@ -341,10 +369,11 @@ export async function createJobs(
 
   let created = 0;
   let skipped = 0;
+  const createdJobIds: string[] = [];
 
   const uniqueUrls = Array.from(byUrl.keys());
   if (uniqueUrls.length === 0) {
-    return { created, skipped };
+    return { created, skipped, createdJobIds };
   }
 
   const existingRows = await db
@@ -384,6 +413,7 @@ export async function createJobs(
     }
 
     created += 1;
+    createdJobIds.push(inserted.id);
     skipped += count - 1;
     duplicateIndex.add({
       id: inserted.id,
@@ -400,7 +430,7 @@ export async function createJobs(
     });
   }
 
-  return { created, skipped };
+  return { created, skipped, createdJobIds };
 }
 
 /**
@@ -418,11 +448,21 @@ export async function updateJob(
   input: UpdateJobInput,
 ): Promise<Job | null> {
   const now = new Date().toISOString();
+  let jobLevelCategory: JobLevel | null | undefined;
+  if (input.title !== undefined || input.jobLevel !== undefined) {
+    const current = await getJobById(id);
+    if (!current) return null;
+    jobLevelCategory = inferJobLevel(
+      input.jobLevel !== undefined ? input.jobLevel : current.jobLevel,
+      input.title ?? current.title,
+    );
+  }
 
   await db
     .update(jobs)
     .set({
       ...input,
+      ...(jobLevelCategory !== undefined ? { jobLevelCategory } : {}),
       updatedAt: now,
       ...(input.status === "processing" ? { processedAt: now } : {}),
       ...(input.status === "applied" && !input.appliedAt
@@ -474,8 +514,9 @@ export async function markPostingDateChecked(
  */
 export async function getJobStats(
   search?: string,
+  jobLevels?: JobLevel[],
 ): Promise<Record<JobStatus, number>> {
-  const whereClause = buildJobsWhere(undefined, search);
+  const whereClause = buildJobsWhere(undefined, search, jobLevels);
   const baseQuery = db
     .select({
       status: jobs.status,
@@ -525,16 +566,25 @@ export async function getJobsForProcessing(limit: number = 10): Promise<Job[]> {
  * Get discovered jobs missing a suitability score.
  */
 export async function getUnscoredDiscoveredJobs(
-  limit?: number,
+  options: { limit?: number; ids?: string[] } = {},
 ): Promise<Job[]> {
+  if (options.ids && options.ids.length === 0) return [];
   const query = db
     .select()
     .from(jobs)
-    .where(and(eq(jobs.status, "discovered"), isNull(jobs.suitabilityScore)))
+    .where(
+      and(
+        eq(jobs.status, "discovered"),
+        isNull(jobs.suitabilityScore),
+        options.ids ? inArray(jobs.id, options.ids) : undefined,
+      ),
+    )
     .orderBy(desc(jobs.discoveredAt));
 
   const rows =
-    typeof limit === "number" ? await query.limit(limit) : await query;
+    typeof options.limit === "number"
+      ? await query.limit(options.limit)
+      : await query;
   return rows.map(mapRowToJob);
 }
 
@@ -610,6 +660,9 @@ function mapRowToJob(row: typeof jobs.$inferSelect): Job {
     salaryCurrency: row.salaryCurrency ?? null,
     isRemote: row.isRemote ?? null,
     jobLevel: row.jobLevel ?? null,
+    jobLevelCategory:
+      (row.jobLevelCategory as Job["jobLevelCategory"]) ??
+      inferJobLevel(row.jobLevel, row.title),
     jobFunction: row.jobFunction ?? null,
     listingType: row.listingType ?? null,
     emails: row.emails ?? null,

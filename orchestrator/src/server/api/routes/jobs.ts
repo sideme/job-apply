@@ -44,11 +44,13 @@ import {
   APPLICATION_OUTCOMES,
   APPLICATION_STAGES,
   applicationQuestionSchema,
+  JOB_LEVELS,
   type Job,
   type JobAction,
   type JobActionResponse,
   type JobActionResult,
   type JobActionStreamEvent,
+  type JobLevel,
   type JobListItem,
   type JobStatus,
   type JobsListResponse,
@@ -133,6 +135,7 @@ const updateJobSchema = z.object({
   location: z.string().trim().max(200).nullable().optional(),
   salary: z.string().trim().max(200).nullable().optional(),
   deadline: z.string().trim().max(100).nullable().optional(),
+  jobLevel: z.string().trim().max(100).nullable().optional(),
   status: z
     .enum([
       "discovered",
@@ -227,10 +230,39 @@ const jobActionRequestSchema = z.discriminatedUnion("action", [
   }),
 ]);
 
+const jobLevelQuerySchema = z
+  .string()
+  .trim()
+  .max(300)
+  .transform((value, ctx): JobLevel[] => {
+    const values = Array.from(
+      new Set(
+        value
+          .split(",")
+          .map((level) => level.trim())
+          .filter(Boolean),
+      ),
+    );
+    const invalid = values.filter(
+      (level) => !JOB_LEVELS.includes(level as JobLevel),
+    );
+    if (values.length === 0 || invalid.length > 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: invalid.length
+          ? `Unsupported job levels: ${invalid.join(", ")}`
+          : "At least one job level is required",
+      });
+      return z.NEVER;
+    }
+    return values as JobLevel[];
+  });
+
 const listJobsQuerySchema = z.object({
   status: z.string().optional(),
   view: z.enum(["full", "list"]).optional(),
   q: z.string().trim().max(200).optional(),
+  level: jobLevelQuerySchema.optional(),
   limit: z.coerce.number().int().min(1).max(100).default(60),
   offset: z.coerce.number().int().min(0).default(0),
 });
@@ -238,6 +270,7 @@ const listJobsQuerySchema = z.object({
 const jobsRevisionQuerySchema = z.object({
   status: z.string().optional(),
   q: z.string().trim().max(200).optional(),
+  level: jobLevelQuerySchema.optional(),
 });
 
 const SKIPPABLE_STATUSES: ReadonlySet<JobStatus> = new Set([
@@ -529,16 +562,17 @@ jobsRouter.get("/", async (req: Request, res: Response) => {
 
     const statusFilter = parsedQuery.data.status;
     const search = parsedQuery.data.q || undefined;
+    const jobLevels = parsedQuery.data.level;
     const statuses = parseStatusFilter(statusFilter);
     const view = parsedQuery.data.view ?? "list";
     const { limit, offset } = parsedQuery.data;
 
     const [jobs, stats, revision] = await Promise.all([
       view === "list"
-        ? jobsRepo.getJobListItems(statuses, search, limit, offset)
-        : jobsRepo.getAllJobs(statuses, search, limit, offset),
-      jobsRepo.getJobStats(search),
-      jobsRepo.getJobsRevision(statuses, search),
+        ? jobsRepo.getJobListItems(statuses, search, limit, offset, jobLevels)
+        : jobsRepo.getAllJobs(statuses, search, limit, offset, jobLevels),
+      jobsRepo.getJobStats(search, jobLevels),
+      jobsRepo.getJobsRevision(statuses, search, jobLevels),
     ]);
     // getJobsRevision already calculates the filtered count. Reusing it avoids
     // a second count(*) on every server-side search request.
@@ -559,6 +593,7 @@ jobsRouter.get("/", async (req: Request, res: Response) => {
       view,
       statusFilter: statusFilter ?? null,
       search: search ?? null,
+      jobLevels: jobLevels ?? null,
       revision: revision.revision,
       returnedCount: jobs.length,
       total,
@@ -599,7 +634,12 @@ jobsRouter.get("/revision", async (req: Request, res: Response) => {
 
     const statuses = parseStatusFilter(parsedQuery.data.status);
     const search = parsedQuery.data.q || undefined;
-    const revision = await jobsRepo.getJobsRevision(statuses, search);
+    const jobLevels = parsedQuery.data.level;
+    const revision = await jobsRepo.getJobsRevision(
+      statuses,
+      search,
+      jobLevels,
+    );
 
     const response: JobsRevisionResponse = {
       revision: revision.revision,
@@ -611,6 +651,7 @@ jobsRouter.get("/revision", async (req: Request, res: Response) => {
     logger.info("Jobs revision fetched", {
       route: "GET /api/jobs/revision",
       statusFilter: revision.statusFilter,
+      jobLevels: jobLevels ?? null,
       revision: revision.revision,
       total: revision.total,
     });

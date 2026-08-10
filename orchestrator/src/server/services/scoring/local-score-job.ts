@@ -58,6 +58,8 @@ export async function calculateLocalJobScore(
   return scoreJobLocally({
     jobId: job.id,
     jobText: `${job.title}\n${job.jobDescription ?? ""}`,
+    jobTitle: job.title,
+    jobDescription: job.jobDescription ?? "",
     resumeText,
     resumeVector,
     cachedJobVector: parseCachedVector(job.jobEmbedding),

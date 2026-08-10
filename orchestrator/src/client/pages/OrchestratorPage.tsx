@@ -35,6 +35,8 @@ export const OrchestratorPage: React.FC = () => {
     setSearchQuery,
     sourceFilter,
     setSourceFilter,
+    jobLevelFilters,
+    setJobLevelFilters,
     salaryFilter,
     setSalaryFilter,
     sort,
@@ -119,7 +121,12 @@ export const OrchestratorPage: React.FC = () => {
     setIsRefreshPaused,
     loadJobs,
     loadMoreJobs,
-  } = useOrchestratorData(selectedJobId, searchQuery, activeTab);
+  } = useOrchestratorData(
+    selectedJobId,
+    searchQuery,
+    activeTab,
+    jobLevelFilters,
+  );
   const enabledSources = useMemo(
     () => getEnabledSources(settings ?? null),
     [settings],
@@ -249,6 +256,7 @@ export const OrchestratorPage: React.FC = () => {
       const nextParams = new URLSearchParams(searchParams);
       for (const key of [
         "source",
+        "level",
         "sponsor",
         "salaryMode",
         "salaryMin",
@@ -371,6 +379,8 @@ export const OrchestratorPage: React.FC = () => {
             onFiltersOpenChange={setIsFiltersOpen}
             sourceFilter={sourceFilter}
             onSourceFilterChange={setSourceFilter}
+            jobLevelFilters={jobLevelFilters}
+            onJobLevelFiltersChange={setJobLevelFilters}
             salaryFilter={salaryFilter}
             onSalaryFilterChange={setSalaryFilter}
             sourcesWithJobs={sourcesWithJobs}

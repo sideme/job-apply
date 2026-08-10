@@ -153,7 +153,7 @@ export const ScoringSettingsSection: React.FC<ScoringSettingsSectionProps> = ({
                   },
                 }}
                 disabled={isLoading || isSaving}
-                helper="Blend weight for embedding similarity. The remainder is keyword coverage."
+                helper="Optional semantic influence. Local qualification rules always keep at least 75% of this job-fit estimate; it is not an employer ATS pass score."
                 current={`Effective: ${semanticScoreWeight.effective} | Default: ${semanticScoreWeight.default}`}
               />
             )}

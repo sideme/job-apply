@@ -1,6 +1,11 @@
 import { KbdHint } from "@client/components/KbdHint";
 import { getDisplayKey, SHORTCUTS } from "@client/lib/shortcut-map";
-import type { JobSource } from "@shared/types.js";
+import {
+  JOB_LEVEL_LABELS,
+  JOB_LEVELS,
+  type JobLevel,
+  type JobSource,
+} from "@shared/types.js";
 import { Filter, Search } from "lucide-react";
 import type React from "react";
 import { useMemo, useState } from "react";
@@ -8,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { SearchableMultiSelectDropdown } from "@/components/ui/searchable-multi-select-dropdown";
 import {
   Select,
   SelectContent,
@@ -41,6 +47,8 @@ interface OrchestratorFiltersProps {
   onOpenCommandBar: () => void;
   sourceFilter: JobSource | "all";
   onSourceFilterChange: (value: JobSource | "all") => void;
+  jobLevelFilters: JobLevel[];
+  onJobLevelFiltersChange: (values: JobLevel[]) => void;
   salaryFilter: SalaryFilter;
   onSalaryFilterChange: (value: SalaryFilter) => void;
   sourcesWithJobs: JobSource[];
@@ -59,6 +67,19 @@ const salaryModeOptions: Array<{
   { value: "at_least", label: "at least" },
   { value: "at_most", label: "at most" },
   { value: "between", label: "between" },
+];
+
+const jobLevelOptions = [
+  ...JOB_LEVELS.map((level) => ({
+    value: level,
+    label: JOB_LEVEL_LABELS[level],
+    searchText:
+      level === "entry_level"
+        ? "junior new graduate early career"
+        : level === "lead"
+          ? "staff principal technical lead"
+          : level.replaceAll("_", " "),
+  })),
 ];
 
 const sortFieldOrder: JobSort["key"][] = [
@@ -105,6 +126,8 @@ export const OrchestratorFilters: React.FC<OrchestratorFiltersProps> = ({
   onOpenCommandBar,
   sourceFilter,
   onSourceFilterChange,
+  jobLevelFilters,
+  onJobLevelFiltersChange,
   salaryFilter,
   onSalaryFilterChange,
   sourcesWithJobs,
@@ -116,6 +139,7 @@ export const OrchestratorFilters: React.FC<OrchestratorFiltersProps> = ({
   onFiltersOpenChange: onFiltersOpenChangeProp,
 }) => {
   const [internalOpen, setInternalOpen] = useState(false);
+  const [sheetContent, setSheetContent] = useState<HTMLDivElement | null>(null);
   const isFiltersOpen = isFiltersOpenProp ?? internalOpen;
   const onFiltersOpenChange = onFiltersOpenChangeProp ?? setInternalOpen;
 
@@ -126,11 +150,12 @@ export const OrchestratorFilters: React.FC<OrchestratorFiltersProps> = ({
   const activeFilterCount = useMemo(
     () =>
       Number(sourceFilter !== "all") +
+      Number(jobLevelFilters.length > 0) +
       Number(
         (typeof salaryFilter.min === "number" && salaryFilter.min > 0) ||
           (typeof salaryFilter.max === "number" && salaryFilter.max > 0),
       ),
-    [sourceFilter, salaryFilter.min, salaryFilter.max],
+    [sourceFilter, jobLevelFilters.length, salaryFilter.min, salaryFilter.max],
   );
   const showSalaryMin =
     salaryFilter.mode === "at_least" || salaryFilter.mode === "between";
@@ -195,7 +220,11 @@ export const OrchestratorFilters: React.FC<OrchestratorFiltersProps> = ({
               </Button>
             </SheetTrigger>
 
-            <SheetContent side="right" className="w-full sm:max-w-2xl">
+            <SheetContent
+              ref={setSheetContent}
+              side="right"
+              className="w-full sm:max-w-2xl"
+            >
               <div className="flex h-full min-h-0 flex-col">
                 <SheetHeader>
                   <SheetTitle className="flex items-center gap-2">
@@ -207,7 +236,7 @@ export const OrchestratorFilters: React.FC<OrchestratorFiltersProps> = ({
                     )}
                   </SheetTitle>
                   <SheetDescription>
-                    Refine sources, salary, and sorting.
+                    Refine sources, job level, salary, and sorting.
                   </SheetDescription>
                 </SheetHeader>
 
@@ -240,6 +269,32 @@ export const OrchestratorFilters: React.FC<OrchestratorFiltersProps> = ({
                           {sourceLabel[source]}
                         </Button>
                       ))}
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader className="pb-3">
+                      <CardTitle>Job level</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-2">
+                      <SearchableMultiSelectDropdown
+                        values={jobLevelFilters}
+                        options={jobLevelOptions}
+                        onValuesChange={(values) =>
+                          onJobLevelFiltersChange(values as JobLevel[])
+                        }
+                        placeholder="All job levels"
+                        searchPlaceholder="Search job levels..."
+                        emptyText="No matching job level."
+                        ariaLabel="Job level filters"
+                        triggerClassName="w-full"
+                        contentClassName="w-[var(--radix-popover-trigger-width)]"
+                        portalContainer={sheetContent}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Source labels are normalized; when missing, the job
+                        title is used as a fallback.
+                      </p>
                     </CardContent>
                   </Card>
 

@@ -27,10 +27,26 @@ function parseCachedVector(raw: string | null): number[] | null {
 
 export async function scoreJobsStep(args: {
   profile: Record<string, unknown>;
+  jobIds: string[];
   shouldCancel?: () => boolean;
 }): Promise<{ unprocessedJobs: Job[]; scoredJobs: ScoredJob[] }> {
   logger.info("Running scoring step");
-  const unprocessedJobs = await jobsRepo.getUnscoredDiscoveredJobs();
+  const unprocessedJobs = await jobsRepo.getUnscoredDiscoveredJobs({
+    ids: args.jobIds,
+  });
+  updateProgress({
+    step: "scoring",
+    jobsDiscovered: unprocessedJobs.length,
+    jobsScored: 0,
+    jobsProcessed: 0,
+    totalToProcess: 0,
+    currentJob: undefined,
+  });
+  if (unprocessedJobs.length === 0) {
+    progressHelpers.scoringComplete(0);
+    logger.info("Scoring step skipped; no new unscored jobs");
+    return { unprocessedJobs, scoredJobs: [] };
+  }
 
   // Check if auto-skip threshold is configured
   const autoSkipThresholdRaw = await settingsRepo.getSetting(
@@ -72,15 +88,6 @@ export async function scoreJobsStep(args: {
     resumeText = await extractLocalResumeText();
   }
 
-  updateProgress({
-    step: "scoring",
-    jobsDiscovered: unprocessedJobs.length,
-    jobsScored: 0,
-    jobsProcessed: 0,
-    totalToProcess: 0,
-    currentJob: undefined,
-  });
-
   const scoredJobs: ScoredJob[] = [];
   let completed = 0;
   let embeddingReservations = 0;
@@ -117,6 +124,8 @@ export async function scoreJobsStep(args: {
       const local = await scoreJobLocally({
         jobId: job.id,
         jobText: `${job.title}\n${job.jobDescription ?? ""}`,
+        jobTitle: job.title,
+        jobDescription: job.jobDescription ?? "",
         resumeText,
         resumeVector,
         cachedJobVector: parseCachedVector(job.jobEmbedding),

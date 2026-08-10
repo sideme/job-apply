@@ -13,7 +13,7 @@ import {
   useSkipJobMutation,
 } from "@client/hooks/queries/useJobMutations";
 import { useProfile } from "@client/hooks/useProfile";
-import type { Job, JobListItem } from "@shared/types.js";
+import { formatJobLevel, type Job, type JobListItem } from "@shared/types.js";
 import {
   CheckCircle2,
   Copy,
@@ -607,7 +607,7 @@ export const JobDetailPanel: React.FC<JobDetailPanelProps> = ({
                 Level
               </div>
               <div className="text-foreground/80">
-                {selectedJob.jobLevel || "-"}
+                {formatJobLevel(selectedJob.jobLevelCategory) || "-"}
               </div>
             </div>
             <div>
