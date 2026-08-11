@@ -71,6 +71,10 @@ def _parse_sites(raw: str) -> list[str]:
     return [s.strip() for s in raw.split(",") if s.strip()]
 
 
+def _parse_proxies(raw: str) -> list[str]:
+    return [p.strip() for p in raw.split(",") if p.strip()]
+
+
 def _normalize_country_token(value: str) -> str:
     normalized = " ".join(value.strip().lower().split())
     return COUNTRY_ALIASES.get(normalized, normalized)
@@ -97,6 +101,7 @@ def _scrape_for_sites(
     country_indeed: str,
     linkedin_fetch_description: bool,
     is_remote: bool,
+    proxies: list[str] | None = None,
 ) -> pd.DataFrame:
     kwargs: dict[str, object] = {
         "site_name": sites,
@@ -109,6 +114,8 @@ def _scrape_for_sites(
     }
     if location and location.strip():
         kwargs["location"] = location
+    if proxies:
+        kwargs["proxies"] = proxies
     return scrape_jobs(**kwargs)
 
 
@@ -121,6 +128,7 @@ def main() -> int:
     country_indeed = _env_str("JOBSPY_COUNTRY_INDEED", "UK")
     linkedin_fetch_description = _env_bool("JOBSPY_LINKEDIN_FETCH_DESCRIPTION", True)
     is_remote = _env_bool("JOBSPY_IS_REMOTE", False)
+    proxies = _parse_proxies(_env_str("JOBSPY_PROXIES", ""))
     term_index = _env_int("JOBSPY_TERM_INDEX", 1)
     term_total = _env_int("JOBSPY_TERM_TOTAL", 1)
 
@@ -146,6 +154,29 @@ def main() -> int:
 
     for site in sites:
         site_location = location
+        # Glassdoor serves an anti-bot "Security" wall (HTTP 403) to datacenter
+        # and home-server IPs, which JobSpy surfaces as the misleading
+        # "location not parsed". A residential proxy is the only reliable way
+        # through, so skip it with an actionable message when none is set
+        # instead of wasting a request that is guaranteed to fail.
+        if site == "glassdoor" and not proxies:
+            skip_message = (
+                "Glassdoor blocks server/datacenter IPs with an anti-bot wall; "
+                "set JOBSPY_PROXIES to a residential proxy to enable it"
+            )
+            print(f"jobspy: skipping Glassdoor - {skip_message}")
+            site_errors.append({"site": site, "error": skip_message})
+            _emit_progress(
+                "site_error",
+                {
+                    "termIndex": term_index,
+                    "termTotal": term_total,
+                    "searchTerm": search_term,
+                    "site": site,
+                    "error": skip_message,
+                },
+            )
+            continue
         if site == "glassdoor" and _is_country_level_location(location, country_indeed):
             fallback_city = _glassdoor_city_for_country(country_indeed, location)
             if fallback_city:
@@ -169,6 +200,7 @@ def main() -> int:
                 country_indeed=country_indeed,
                 linkedin_fetch_description=linkedin_fetch_description,
                 is_remote=is_remote,
+                proxies=proxies,
             )
             frames.append(frame)
         except Exception as exc:  # noqa: BLE001 - deliberately broad: isolate one site's failure from the rest

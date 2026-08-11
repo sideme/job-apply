@@ -2,7 +2,7 @@
 
 Personal, self-hosted job search pipeline for the Canadian market: discovers postings (LinkedIn/Indeed via JobSpy, plus optional Adzuna), scores fit against a resume, and manages a local PDF resume. The browser extension can fill configured answers and submit only after an explicit review checkbox and confirmation click.
 
-The Jobs screen loads 60 postings at a time and exposes **Load more jobs** when additional matches exist. Search runs against a local SQLite FTS5 index over title, company, and location, so it does not call an LLM or consume tokens. Multiple search words must all match; partial word prefixes such as `develop` match `developer`.
+The Jobs screen loads 60 postings at a time and exposes **Load more jobs** when additional matches exist. Search runs against a local SQLite FTS5 index over title, company, location, and the full job description, so a keyword like `spring`, `kafka`, or `kubernetes` finds every posting that requires it—not only the rare listings that name it in the title—and it does not call an LLM or consume tokens. Multiple search words must all match; partial word prefixes such as `develop` match `developer`.
 
 Forked from [job-ops](https://github.com/DaKheera47/job-ops) and trimmed down to only what's needed here (dropped the UK-specific extractors, the public docs site, and unused sources). No shared git history with upstream by design.
 
@@ -30,7 +30,9 @@ After setting your search terms, country, and city list in **Run Jobs**, enable 
 docker compose --profile scheduler up -d
 ```
 
-It searches Indeed every hour and includes LinkedIn every three hours by default. Glassdoor, the legacy UK sponsor workflow, and tracer links are not part of this Canadian build. Scheduler timestamps are persisted in `data/pipeline-scheduler-state.json`, so rebuilding or restarting the container does not trigger an early repeat. Set `PIPELINE_SCHEDULE_CORE_MINUTES` and `PIPELINE_SCHEDULE_LINKEDIN_MINUTES` in `.env` to change the cadence. Keep the LinkedIn interval relatively conservative to reduce account-risk exposure.
+It searches Indeed every hour and includes LinkedIn every three hours by default. The legacy UK sponsor workflow and tracer links are not part of this Canadian build.
+
+Glassdoor is available as a source but is **disabled unless a residential proxy is configured**: Glassdoor serves an anti-bot "Security" wall (HTTP 403) to datacenter and home-server IPs, which JobSpy otherwise reports as the misleading "location not parsed". Set `JOBSPY_PROXIES` in `.env` to a comma-separated list of residential proxy URLs to enable it; without a proxy, Glassdoor is skipped cleanly each run with an explanatory note and the other sources continue unaffected. Scheduler timestamps are persisted in `data/pipeline-scheduler-state.json`, so rebuilding or restarting the container does not trigger an early repeat. Set `PIPELINE_SCHEDULE_CORE_MINUTES` and `PIPELINE_SCHEDULE_LINKEDIN_MINUTES` in `.env` to change the cadence. Keep the LinkedIn interval relatively conservative to reduce account-risk exposure.
 
 ## WhatsApp notifications
 

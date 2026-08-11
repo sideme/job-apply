@@ -39,3 +39,7 @@ Thumbs.db
 
 # JetBrains IDE
 .idea/
+
+# Python bytecode cache
+__pycache__/
+*.pyc

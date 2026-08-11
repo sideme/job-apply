@@ -28,13 +28,24 @@ const existingJobsTable = sqlite
 const shouldRebuildJobsStatus = Boolean(
   existingJobsTable?.sql && !existingJobsTable.sql.includes("'in_progress'"),
 );
+const existingJobsFts = sqlite
+  .prepare(
+    "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'jobs_fts'",
+  )
+  .get() as { sql?: string } | undefined;
+// Older databases indexed only title/employer/location. Rebuild the FTS table
+// so keyword search also matches the job description (e.g. "spring", "kafka").
+const shouldMigrateJobsFts = Boolean(
+  existingJobsFts?.sql && !existingJobsFts.sql.includes("job_description"),
+);
+if (shouldMigrateJobsFts) {
+  sqlite.exec("DROP TRIGGER IF EXISTS jobs_fts_after_insert");
+  sqlite.exec("DROP TRIGGER IF EXISTS jobs_fts_after_delete");
+  sqlite.exec("DROP TRIGGER IF EXISTS jobs_fts_after_update");
+  sqlite.exec("DROP TABLE IF EXISTS jobs_fts");
+}
 const shouldInitializeJobsFts =
-  shouldRebuildJobsStatus ||
-  !sqlite
-    .prepare(
-      "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'jobs_fts'",
-    )
-    .get();
+  shouldRebuildJobsStatus || shouldMigrateJobsFts || !existingJobsFts;
 
 const migrations = [
   `CREATE TABLE IF NOT EXISTS jobs (
@@ -505,23 +516,24 @@ const migrations = [
     title,
     employer,
     location,
+    job_description,
     content='jobs',
     content_rowid='rowid',
     tokenize='unicode61 remove_diacritics 2'
   )`,
   `CREATE TRIGGER IF NOT EXISTS jobs_fts_after_insert AFTER INSERT ON jobs BEGIN
-    INSERT INTO jobs_fts(rowid, title, employer, location)
-    VALUES (new.rowid, new.title, new.employer, COALESCE(new.location, ''));
+    INSERT INTO jobs_fts(rowid, title, employer, location, job_description)
+    VALUES (new.rowid, new.title, new.employer, COALESCE(new.location, ''), COALESCE(new.job_description, ''));
   END`,
   `CREATE TRIGGER IF NOT EXISTS jobs_fts_after_delete AFTER DELETE ON jobs BEGIN
-    INSERT INTO jobs_fts(jobs_fts, rowid, title, employer, location)
-    VALUES ('delete', old.rowid, old.title, old.employer, COALESCE(old.location, ''));
+    INSERT INTO jobs_fts(jobs_fts, rowid, title, employer, location, job_description)
+    VALUES ('delete', old.rowid, old.title, old.employer, COALESCE(old.location, ''), COALESCE(old.job_description, ''));
   END`,
-  `CREATE TRIGGER IF NOT EXISTS jobs_fts_after_update AFTER UPDATE OF title, employer, location ON jobs BEGIN
-    INSERT INTO jobs_fts(jobs_fts, rowid, title, employer, location)
-    VALUES ('delete', old.rowid, old.title, old.employer, COALESCE(old.location, ''));
-    INSERT INTO jobs_fts(rowid, title, employer, location)
-    VALUES (new.rowid, new.title, new.employer, COALESCE(new.location, ''));
+  `CREATE TRIGGER IF NOT EXISTS jobs_fts_after_update AFTER UPDATE OF title, employer, location, job_description ON jobs BEGIN
+    INSERT INTO jobs_fts(jobs_fts, rowid, title, employer, location, job_description)
+    VALUES ('delete', old.rowid, old.title, old.employer, COALESCE(old.location, ''), COALESCE(old.job_description, ''));
+    INSERT INTO jobs_fts(rowid, title, employer, location, job_description)
+    VALUES (new.rowid, new.title, new.employer, COALESCE(new.location, ''), COALESCE(new.job_description, ''));
   END`,
   `CREATE TABLE IF NOT EXISTS resume_embedding (
     hash TEXT PRIMARY KEY,

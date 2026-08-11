@@ -21,6 +21,24 @@ const compareString = (a: string, b: string) =>
   a.localeCompare(b, undefined, { sensitivity: "base" });
 const compareNumber = (a: number, b: number) => a - b;
 
+const DAY_MS = 86_400_000;
+
+/** Floor an epoch-ms timestamp to its calendar day so postings from the same
+ * day compare equal regardless of an enriched intra-day time. */
+const dayBucket = (epochMs: number | null) =>
+  epochMs == null ? null : Math.floor(epochMs / DAY_MS);
+
+/** Higher suitability score first; unscored jobs sort last. Direction-independent
+ * so it can break posting-day ties without the outer sort direction flipping it. */
+const compareScoreDescNullsLast = (a: JobListItem, b: JobListItem) => {
+  const aScore = a.suitabilityScore;
+  const bScore = b.suitabilityScore;
+  if (aScore == null && bScore == null) return 0;
+  if (aScore == null) return 1;
+  if (bScore == null) return -1;
+  return bScore - aScore;
+};
+
 export const clampNumber = (value: number, min: number, max: number) =>
   Math.max(min, Math.min(max, value));
 
@@ -103,15 +121,27 @@ export const compareJobs = (a: JobListItem, b: JobListItem, sort: JobSort) => {
       break;
     }
     case "discoveredAt": {
-      const aDate = dateValue(a.datePosted) ?? dateValue(a.discoveredAt);
-      const bDate = dateValue(b.datePosted) ?? dateValue(b.discoveredAt);
+      const aDate = dayBucket(
+        dateValue(a.datePosted) ?? dateValue(a.discoveredAt),
+      );
+      const bDate = dayBucket(
+        dateValue(b.datePosted) ?? dateValue(b.discoveredAt),
+      );
       if (aDate == null && bDate == null) {
         value = 0;
-        break;
+      } else if (aDate == null) {
+        return 1;
+      } else if (bDate == null) {
+        return -1;
+      } else {
+        value = compareNumber(aDate, bDate);
       }
-      if (aDate == null) return 1;
-      if (bDate == null) return -1;
-      value = compareNumber(aDate, bDate);
+      // Within the same posting day, rank the higher ATS match first (always
+      // descending, regardless of the date sort direction).
+      if (value === 0) {
+        const scoreTie = compareScoreDescNullsLast(a, b);
+        if (scoreTie !== 0) return scoreTie;
+      }
       break;
     }
     default:
