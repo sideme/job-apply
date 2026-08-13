@@ -36,6 +36,9 @@ export interface JobsListResponse<TJob = Job> {
   limit: number;
   offset: number;
   hasMore: boolean;
+  /** Distinct sources present in the current filtered view (ignoring the source
+   * filter itself), so the client can offer them all regardless of pagination. */
+  availableSources: ExtractorSourceId[];
 }
 
 export interface JobsRevisionResponse {

@@ -1,10 +1,6 @@
 import type { AppSettings, JobListItem, JobSource } from "@shared/types";
 import type { FilterTab, JobSort } from "./constants";
-import {
-  DEFAULT_PIPELINE_SOURCES,
-  orderedFilterSources,
-  orderedSources,
-} from "./constants";
+import { DEFAULT_PIPELINE_SOURCES, orderedSources } from "./constants";
 
 const dateValue = (value: string | null) => {
   if (!value) return null;
@@ -190,14 +186,6 @@ export const getJobCounts = (
   }
 
   return byTab;
-};
-
-export const getSourcesWithJobs = (jobs: JobListItem[]): JobSource[] => {
-  const seen = new Set<JobSource>();
-  for (const job of jobs) {
-    seen.add(job.source);
-  }
-  return orderedFilterSources.filter((source) => seen.has(source));
 };
 
 export const getEnabledSources = (

@@ -1,6 +1,12 @@
 import * as api from "@client/api";
 import { subscribeToEventSource } from "@client/lib/sse";
-import type { Job, JobLevel, JobListItem, JobStatus } from "@shared/types";
+import type {
+  Job,
+  JobLevel,
+  JobListItem,
+  JobSource,
+  JobStatus,
+} from "@shared/types";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -94,9 +100,11 @@ export const useOrchestratorData = (
   searchQuery = "",
   activeTab: "ready" | "discovered" | "applied" | "all" = "all",
   jobLevels: JobLevel[] = EMPTY_JOB_LEVELS,
+  sourceFilter: JobSource | "all" = "all",
 ) => {
   const queryClient = useQueryClient();
   const [jobListItems, setJobListItems] = useState<JobListItem[]>([]);
+  const [availableSources, setAvailableSources] = useState<JobSource[]>([]);
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
   const [stats, setStats] = useState<Record<JobStatus, number>>(initialStats);
   const [isLoading, setIsLoading] = useState(true);
@@ -231,6 +239,7 @@ export const useOrchestratorData = (
         statuses: statusesForTab(activeTab),
         ...(normalizedSearchQuery ? { search: normalizedSearchQuery } : {}),
         ...(jobLevels.length ? { jobLevels } : {}),
+        ...(sourceFilter !== "all" ? { sources: [sourceFilter] } : {}),
         limit: JOBS_PAGE_SIZE,
         offset: 0,
       });
@@ -242,6 +251,7 @@ export const useOrchestratorData = (
         setStats(data.byStatus);
         setTotalJobs(data.total);
         setHasMoreJobs(data.hasMore ?? data.jobs.length < data.total);
+        setAvailableSources(data.availableSources ?? []);
         lastRevisionRef.current = data.revision;
       }
     } catch (error) {
@@ -257,7 +267,7 @@ export const useOrchestratorData = (
         setIsLoading(false);
       }
     }
-  }, [activeTab, jobLevels, normalizedSearchQuery, queryClient]);
+  }, [activeTab, jobLevels, normalizedSearchQuery, queryClient, sourceFilter]);
 
   const loadMoreJobs = useCallback(async () => {
     if (isLoadingMore || !hasMoreJobs) return;
@@ -268,6 +278,7 @@ export const useOrchestratorData = (
         statuses: statusesForTab(activeTab),
         ...(normalizedSearchQuery ? { search: normalizedSearchQuery } : {}),
         ...(jobLevels.length ? { jobLevels } : {}),
+        ...(sourceFilter !== "all" ? { sources: [sourceFilter] } : {}),
         limit: JOBS_PAGE_SIZE,
         offset: loadedJobsCountRef.current,
       });
@@ -286,6 +297,7 @@ export const useOrchestratorData = (
         data.hasMore ??
           loadedJobsCountRef.current + data.jobs.length < data.total,
       );
+      setAvailableSources(data.availableSources ?? []);
       lastRevisionRef.current = data.revision;
     } catch (error) {
       const message =
@@ -294,7 +306,14 @@ export const useOrchestratorData = (
     } finally {
       setIsLoadingMore(false);
     }
-  }, [activeTab, hasMoreJobs, isLoadingMore, jobLevels, normalizedSearchQuery]);
+  }, [
+    activeTab,
+    hasMoreJobs,
+    isLoadingMore,
+    jobLevels,
+    normalizedSearchQuery,
+    sourceFilter,
+  ]);
 
   const checkPipelineStatus = useCallback(async () => {
     try {
@@ -347,6 +366,7 @@ export const useOrchestratorData = (
             statuses: statusesForTab(activeTab),
             ...(normalizedSearchQuery ? { search: normalizedSearchQuery } : {}),
             ...(jobLevels.length ? { jobLevels } : {}),
+            ...(sourceFilter !== "all" ? { sources: [sourceFilter] } : {}),
           }),
         staleTime: 0,
       });
@@ -371,6 +391,7 @@ export const useOrchestratorData = (
     loadJobs,
     normalizedSearchQuery,
     queryClient,
+    sourceFilter,
   ]);
 
   useEffect(() => {
@@ -528,6 +549,7 @@ export const useOrchestratorData = (
 
   return {
     jobs: jobListItems,
+    availableSources,
     selectedJob,
     stats,
     totalJobs,

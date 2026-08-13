@@ -112,6 +112,7 @@ const createMatchMedia = (matches: boolean) =>
 vi.mock("./orchestrator/useOrchestratorData", () => ({
   useOrchestratorData: () => ({
     jobs: mockJobs,
+    availableSources: Array.from(new Set(mockJobs.map((job) => job.source))),
     selectedJob: mockSelectedJob,
     stats: {
       discovered: 1,

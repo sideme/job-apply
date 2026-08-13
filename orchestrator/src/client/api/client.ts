@@ -353,6 +353,7 @@ export function getJobs(options: {
   view?: "list";
   search?: string;
   jobLevels?: JobLevel[];
+  sources?: JobSource[];
   limit?: number;
   offset?: number;
 }): Promise<JobsListResponse<JobListItem>>;
@@ -361,6 +362,7 @@ export function getJobs(options?: {
   view: "full";
   search?: string;
   jobLevels?: JobLevel[];
+  sources?: JobSource[];
   limit?: number;
   offset?: number;
 }): Promise<JobsListResponse<Job>>;
@@ -369,6 +371,7 @@ export async function getJobs(options?: {
   view?: "full" | "list";
   search?: string;
   jobLevels?: JobLevel[];
+  sources?: JobSource[];
   limit?: number;
   offset?: number;
 }): Promise<JobsListResponse<Job> | JobsListResponse<JobListItem>> {
@@ -379,6 +382,7 @@ export async function getJobs(options?: {
   if (options?.search?.trim()) params.set("q", options.search.trim());
   if (options?.jobLevels?.length)
     params.set("level", options.jobLevels.join(","));
+  if (options?.sources?.length) params.set("source", options.sources.join(","));
   if (options?.limit != null) params.set("limit", String(options.limit));
   if (options?.offset != null) params.set("offset", String(options.offset));
   const query = params.toString();
@@ -391,6 +395,7 @@ export async function getJobsRevision(options?: {
   statuses?: string[];
   search?: string;
   jobLevels?: JobLevel[];
+  sources?: JobSource[];
 }): Promise<JobsRevisionResponse> {
   const params = new URLSearchParams();
   if (options?.statuses?.length)
@@ -398,6 +403,7 @@ export async function getJobsRevision(options?: {
   if (options?.search?.trim()) params.set("q", options.search.trim());
   if (options?.jobLevels?.length)
     params.set("level", options.jobLevels.join(","));
+  if (options?.sources?.length) params.set("source", options.sources.join(","));
   const query = params.toString();
   return fetchApi<JobsRevisionResponse>(
     `/jobs/revision${query ? `?${query}` : ""}`,

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 // biome-ignore format: the TypeScript suppression must stay on the import line.
 // @ts-expect-error The production scheduler is a plain Node ESM entrypoint.
-import { getScheduleSlot, parseSchedulerState } from "../../../../scripts/pipeline-scheduler.mjs";
+import { getScheduleSlot, parseSchedulerState, resolveSlotSources } from "../../../../scripts/pipeline-scheduler.mjs";
 
 describe("pipeline scheduler persistence", () => {
   it("returns the active Toronto weekday slot", () => {
@@ -89,5 +89,35 @@ describe("pipeline scheduler persistence", () => {
       version: 2,
       lastRunSlot: "2026-08-10T10:00@America/Toronto",
     });
+  });
+
+  it("adds daily-only sources on the first slot of the day", () => {
+    expect(resolveSlotSources(10, ["indeed", "linkedin"], ["adzuna"])).toEqual([
+      "indeed",
+      "linkedin",
+      "adzuna",
+    ]);
+  });
+
+  it("omits daily-only sources on later slots", () => {
+    for (const hour of [12, 14, 16, 18]) {
+      expect(
+        resolveSlotSources(hour, ["indeed", "linkedin"], ["adzuna"]),
+      ).toEqual(["indeed", "linkedin"]);
+    }
+  });
+
+  it("does not duplicate a source listed in both tiers", () => {
+    expect(resolveSlotSources(10, ["indeed", "adzuna"], ["adzuna"])).toEqual([
+      "indeed",
+      "adzuna",
+    ]);
+  });
+
+  it("returns base sources unchanged when no daily sources are set", () => {
+    expect(resolveSlotSources(10, ["indeed", "linkedin"], [])).toEqual([
+      "indeed",
+      "linkedin",
+    ]);
   });
 });

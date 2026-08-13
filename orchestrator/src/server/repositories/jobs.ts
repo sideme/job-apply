@@ -9,6 +9,7 @@ import type {
   Job,
   JobLevel,
   JobListItem,
+  JobSource,
   JobStatus,
   JobsRevisionResponse,
   UpdateJobInput,
@@ -59,6 +60,7 @@ function buildJobsWhere(
   statuses?: JobStatus[],
   search?: string,
   jobLevels?: JobLevel[],
+  sources?: JobSource[],
 ) {
   const statusClause =
     statuses && statuses.length > 0
@@ -68,12 +70,16 @@ function buildJobsWhere(
   const jobLevelClause = jobLevels?.length
     ? inArray(jobs.jobLevelCategory, jobLevels)
     : undefined;
+  const sourceClause = sources?.length
+    ? inArray(jobs.source, sources)
+    : undefined;
 
   return and(
     isNull(jobs.duplicateOfJobId),
     statusClause,
     searchClause,
     jobLevelClause,
+    sourceClause,
   );
 }
 
@@ -86,8 +92,9 @@ export async function getAllJobs(
   limit?: number,
   offset = 0,
   jobLevels?: JobLevel[],
+  sources?: JobSource[],
 ): Promise<Job[]> {
-  const whereClause = buildJobsWhere(statuses, search, jobLevels);
+  const whereClause = buildJobsWhere(statuses, search, jobLevels, sources);
   const baseQuery = db.select().from(jobs);
   const filteredQuery = whereClause ? baseQuery.where(whereClause) : baseQuery;
   const orderedQuery = filteredQuery.orderBy(desc(jobs.discoveredAt));
@@ -109,6 +116,7 @@ export async function getJobListItems(
   limit?: number,
   offset = 0,
   jobLevels?: JobLevel[],
+  sources?: JobSource[],
 ): Promise<JobListItem[]> {
   const selection = {
     id: jobs.id,
@@ -140,7 +148,7 @@ export async function getJobListItems(
     updatedAt: jobs.updatedAt,
   } as const;
 
-  const whereClause = buildJobsWhere(statuses, search, jobLevels);
+  const whereClause = buildJobsWhere(statuses, search, jobLevels, sources);
   const baseQuery = db.select(selection).from(jobs);
   const filteredQuery = whereClause ? baseQuery.where(whereClause) : baseQuery;
   // Freshest posting first, then best match within the same post date.
@@ -170,10 +178,14 @@ export async function getJobsRevision(
   statuses?: JobStatus[],
   search?: string,
   jobLevels?: JobLevel[],
+  sources?: JobSource[],
 ): Promise<JobsRevisionResponse> {
   const statusFilter = normalizeStatusFilter(statuses);
   const jobLevelFilter = normalizeJobLevelFilter(jobLevels);
-  const whereClause = buildJobsWhere(statuses, search, jobLevels);
+  const sourceFilter = sources?.length
+    ? Array.from(new Set(sources)).sort().join(",")
+    : null;
+  const whereClause = buildJobsWhere(statuses, search, jobLevels, sources);
 
   const baseQuery = db
     .select({
@@ -188,7 +200,7 @@ export async function getJobsRevision(
   const latestUpdatedAt = row?.latestUpdatedAt ?? null;
   const total = row?.total ?? 0;
   const normalizedSearch = normalizeSearch(search);
-  const revision = `${latestUpdatedAt ?? "none"}:${total}:${statusFilter ?? "all"}:${normalizedSearch ?? ""}:${jobLevelFilter ?? "all-levels"}`;
+  const revision = `${latestUpdatedAt ?? "none"}:${total}:${statusFilter ?? "all"}:${normalizedSearch ?? ""}:${jobLevelFilter ?? "all-levels"}:${sourceFilter ?? "all-sources"}`;
 
   return {
     revision,
@@ -515,8 +527,9 @@ export async function markPostingDateChecked(
 export async function getJobStats(
   search?: string,
   jobLevels?: JobLevel[],
+  sources?: JobSource[],
 ): Promise<Record<JobStatus, number>> {
-  const whereClause = buildJobsWhere(undefined, search, jobLevels);
+  const whereClause = buildJobsWhere(undefined, search, jobLevels, sources);
   const baseQuery = db
     .select({
       status: jobs.status,
@@ -541,6 +554,20 @@ export async function getJobStats(
   }
 
   return stats;
+}
+
+/**
+ * Every source that currently has non-duplicate jobs, regardless of the active
+ * status/search/level/source filters. Kept filter-independent so the source
+ * chips stay stable across tabs and searches instead of appearing/disappearing.
+ */
+export async function getDistinctJobSources(): Promise<JobSource[]> {
+  const rows = await db
+    .select({ source: jobs.source })
+    .from(jobs)
+    .where(isNull(jobs.duplicateOfJobId))
+    .groupBy(jobs.source);
+  return rows.map((row) => row.source as JobSource);
 }
 
 /**

@@ -56,6 +56,12 @@ services:
   pipeline-scheduler:
     image: job-apply:latest
     command: ["node", "/app/scripts/pipeline-scheduler.mjs"]
+    environment:
+      # Indeed + LinkedIn refresh on every 2-hour slot. Adzuna is an API with a
+      # monthly quota, so it runs only on the first slot of each weekday
+      # (10:00 Toronto) to keep its results fresh without burning the quota.
+      PIPELINE_SCHEDULE_SOURCES: "indeed,linkedin"
+      PIPELINE_SCHEDULE_DAILY_SOURCES: "adzuna"
     env_file:
       - path: ./.env
         required: false

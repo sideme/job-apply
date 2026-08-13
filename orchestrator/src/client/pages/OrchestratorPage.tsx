@@ -8,6 +8,7 @@ import { KeyboardShortcutBar } from "../components/KeyboardShortcutBar";
 import { KeyboardShortcutDialog } from "../components/KeyboardShortcutDialog";
 import { useDemoInfo } from "../hooks/useDemoInfo";
 import type { FilterTab } from "./orchestrator/constants";
+import { orderedFilterSources } from "./orchestrator/constants";
 import { FloatingJobActionsBar } from "./orchestrator/FloatingJobActionsBar";
 import { JobCommandBar } from "./orchestrator/JobCommandBar";
 import { JobDetailPanel } from "./orchestrator/JobDetailPanel";
@@ -24,7 +25,7 @@ import { useOrchestratorFilters } from "./orchestrator/useOrchestratorFilters";
 import { usePipelineControls } from "./orchestrator/usePipelineControls";
 import { usePipelineSources } from "./orchestrator/usePipelineSources";
 import { useScrollToJobItem } from "./orchestrator/useScrollToJobItem";
-import { getEnabledSources, getSourcesWithJobs } from "./orchestrator/utils";
+import { getEnabledSources } from "./orchestrator/utils";
 
 export const OrchestratorPage: React.FC = () => {
   const { tab, jobId } = useParams<{ tab: string; jobId?: string }>();
@@ -109,6 +110,7 @@ export const OrchestratorPage: React.FC = () => {
   const demoInfo = useDemoInfo();
   const {
     jobs,
+    availableSources,
     selectedJob,
     stats,
     totalJobs,
@@ -126,6 +128,7 @@ export const OrchestratorPage: React.FC = () => {
     searchQuery,
     activeTab,
     jobLevelFilters,
+    sourceFilter,
   );
   const enabledSources = useMemo(
     () => getEnabledSources(settings ?? null),
@@ -169,7 +172,16 @@ export const OrchestratorPage: React.FC = () => {
     }),
     [stats],
   );
-  const sourcesWithJobs = useMemo(() => getSourcesWithJobs(jobs), [jobs]);
+  // Source-filter options come from the server (every source with jobs in the
+  // current view), so they stay complete regardless of how many pages are
+  // loaded. Ordered by the shared display order.
+  const sourcesWithJobs = useMemo(
+    () =>
+      orderedFilterSources.filter((source) =>
+        (availableSources ?? []).includes(source),
+      ),
+    [availableSources],
+  );
   const {
     selectedJobIds,
     canSkipSelected,

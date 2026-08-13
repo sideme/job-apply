@@ -40,6 +40,30 @@ function configuredSources() {
   ];
 }
 
+/**
+ * Sources that run only once per day rather than every slot — intended for
+ * quota-limited API sources such as Adzuna. Empty by default.
+ */
+function configuredDailySources() {
+  const requested = (process.env.PIPELINE_SCHEDULE_DAILY_SOURCES || "")
+    .split(",")
+    .map((source) => source.trim().toLowerCase())
+    .filter((source) => SUPPORTED_SOURCES.has(source));
+  return [...new Set(requested)];
+}
+
+/**
+ * Effective sources for a slot. Base sources run every slot; daily-only sources
+ * are added only on the first slot of the day (so an API with a monthly quota
+ * refreshes once per weekday instead of on every two-hour run).
+ */
+export function resolveSlotSources(slotHour, baseSources, dailySources = []) {
+  if (slotHour === SCHEDULE_HOURS[0] && dailySources.length > 0) {
+    return [...new Set([...baseSources, ...dailySources])];
+  }
+  return [...baseSources];
+}
+
 function zonedParts(now, timeZone) {
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone,
@@ -131,7 +155,8 @@ export async function saveSchedulerState(statePath, state) {
 
 export async function startScheduler(options = {}) {
   const timeZone = options.timeZone || configuredTimeZone();
-  const sources = options.sources || configuredSources();
+  const baseSources = options.sources || configuredSources();
+  const dailySources = options.dailySources || configuredDailySources();
   const statePath =
     options.statePath ||
     process.env.PIPELINE_SCHEDULER_STATE_FILE ||
@@ -142,9 +167,9 @@ export async function startScheduler(options = {}) {
   let activeChild = null;
   let stopping = false;
 
-  const runPipeline = async () => {
+  const runPipeline = async (runSources) => {
     console.log("pipeline-scheduler: starting", {
-      sources,
+      sources: runSources,
       at: new Date().toISOString(),
       timeZone,
     });
@@ -154,7 +179,7 @@ export async function startScheduler(options = {}) {
         ["--workspace", "orchestrator", "run", "pipeline:run"],
         {
           cwd: "/app",
-          env: { ...process.env, PIPELINE_SOURCES: sources.join(",") },
+          env: { ...process.env, PIPELINE_SOURCES: runSources.join(",") },
           stdio: "inherit",
         },
       );
@@ -185,7 +210,7 @@ export async function startScheduler(options = {}) {
     // Persist before spawning so a restart during the same two-hour slot cannot
     // trigger a duplicate search.
     await saveSchedulerState(statePath, state);
-    await runPipeline();
+    await runPipeline(resolveSlotSources(slot.hour, baseSources, dailySources));
   };
 
   const interval = setInterval(() => void tick(), MINUTE);
@@ -200,7 +225,8 @@ export async function startScheduler(options = {}) {
   process.once("SIGINT", () => void stop("SIGINT"));
 
   console.log("pipeline-scheduler: started", {
-    sources,
+    sources: baseSources,
+    dailySources,
     weekdays: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"],
     localHours: SCHEDULE_HOURS,
     activeUntilHour: SCHEDULE_END_HOUR,

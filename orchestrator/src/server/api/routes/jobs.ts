@@ -40,6 +40,7 @@ import { scoreJobSuitability } from "@server/services/scorer";
 import { calculateLocalJobScore } from "@server/services/scoring/local-score-job";
 import { notifyWhatsAppEvent } from "@server/services/whatsapp";
 import { asyncPool } from "@server/utils/async-pool";
+import { EXTRACTOR_SOURCE_IDS } from "@shared/extractors";
 import {
   APPLICATION_OUTCOMES,
   APPLICATION_STAGES,
@@ -52,6 +53,7 @@ import {
   type JobActionStreamEvent,
   type JobLevel,
   type JobListItem,
+  type JobSource,
   type JobStatus,
   type JobsListResponse,
   type JobsRevisionResponse,
@@ -258,11 +260,40 @@ const jobLevelQuerySchema = z
     return values as JobLevel[];
   });
 
+const jobSourceQuerySchema = z
+  .string()
+  .trim()
+  .max(200)
+  .transform((value, ctx): JobSource[] => {
+    const values = Array.from(
+      new Set(
+        value
+          .split(",")
+          .map((source) => source.trim())
+          .filter(Boolean),
+      ),
+    );
+    const invalid = values.filter(
+      (source) => !EXTRACTOR_SOURCE_IDS.includes(source as JobSource),
+    );
+    if (values.length === 0 || invalid.length > 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: invalid.length
+          ? `Unsupported job sources: ${invalid.join(", ")}`
+          : "At least one job source is required",
+      });
+      return z.NEVER;
+    }
+    return values as JobSource[];
+  });
+
 const listJobsQuerySchema = z.object({
   status: z.string().optional(),
   view: z.enum(["full", "list"]).optional(),
   q: z.string().trim().max(200).optional(),
   level: jobLevelQuerySchema.optional(),
+  source: jobSourceQuerySchema.optional(),
   limit: z.coerce.number().int().min(1).max(100).default(60),
   offset: z.coerce.number().int().min(0).default(0),
 });
@@ -271,6 +302,7 @@ const jobsRevisionQuerySchema = z.object({
   status: z.string().optional(),
   q: z.string().trim().max(200).optional(),
   level: jobLevelQuerySchema.optional(),
+  source: jobSourceQuerySchema.optional(),
 });
 
 const SKIPPABLE_STATUSES: ReadonlySet<JobStatus> = new Set([
@@ -563,16 +595,33 @@ jobsRouter.get("/", async (req: Request, res: Response) => {
     const statusFilter = parsedQuery.data.status;
     const search = parsedQuery.data.q || undefined;
     const jobLevels = parsedQuery.data.level;
+    const sources = parsedQuery.data.source;
     const statuses = parseStatusFilter(statusFilter);
     const view = parsedQuery.data.view ?? "list";
     const { limit, offset } = parsedQuery.data;
 
-    const [jobs, stats, revision] = await Promise.all([
+    const [jobs, stats, revision, availableSources] = await Promise.all([
       view === "list"
-        ? jobsRepo.getJobListItems(statuses, search, limit, offset, jobLevels)
-        : jobsRepo.getAllJobs(statuses, search, limit, offset, jobLevels),
-      jobsRepo.getJobStats(search, jobLevels),
-      jobsRepo.getJobsRevision(statuses, search, jobLevels),
+        ? jobsRepo.getJobListItems(
+            statuses,
+            search,
+            limit,
+            offset,
+            jobLevels,
+            sources,
+          )
+        : jobsRepo.getAllJobs(
+            statuses,
+            search,
+            limit,
+            offset,
+            jobLevels,
+            sources,
+          ),
+      jobsRepo.getJobStats(search, jobLevels, sources),
+      jobsRepo.getJobsRevision(statuses, search, jobLevels, sources),
+      // Filter-independent so the source chips stay stable across tabs/searches.
+      jobsRepo.getDistinctJobSources(),
     ]);
     // getJobsRevision already calculates the filtered count. Reusing it avoids
     // a second count(*) on every server-side search request.
@@ -586,6 +635,7 @@ jobsRouter.get("/", async (req: Request, res: Response) => {
       limit,
       offset,
       hasMore: offset + jobs.length < total,
+      availableSources,
     };
 
     logger.info("Jobs list fetched", {
@@ -594,6 +644,7 @@ jobsRouter.get("/", async (req: Request, res: Response) => {
       statusFilter: statusFilter ?? null,
       search: search ?? null,
       jobLevels: jobLevels ?? null,
+      sources: sources ?? null,
       revision: revision.revision,
       returnedCount: jobs.length,
       total,
@@ -635,10 +686,12 @@ jobsRouter.get("/revision", async (req: Request, res: Response) => {
     const statuses = parseStatusFilter(parsedQuery.data.status);
     const search = parsedQuery.data.q || undefined;
     const jobLevels = parsedQuery.data.level;
+    const sources = parsedQuery.data.source;
     const revision = await jobsRepo.getJobsRevision(
       statuses,
       search,
       jobLevels,
+      sources,
     );
 
     const response: JobsRevisionResponse = {
