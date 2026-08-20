@@ -5,8 +5,11 @@
  * This file re-exports everything for backward compatibility.
  */
 
+export * from "./company-description";
 export * from "./company-model-rules";
+export * from "./job-engagement";
 export * from "./job-level";
+export * from "./types/agent";
 export * from "./types/api";
 export * from "./types/application";
 export * from "./types/chat";

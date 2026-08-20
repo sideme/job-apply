@@ -52,6 +52,7 @@ import {
   formatTimestamp,
 } from "@/lib/utils";
 import * as api from "../api";
+import { CompanyDescription } from "../components/CompanyDescription";
 import { ConfirmDelete } from "../components/ConfirmDelete";
 import { GhostwriterDrawer } from "../components/ghostwriter/GhostwriterDrawer";
 import { JobDetailsEditDrawer } from "../components/JobDetailsEditDrawer";
@@ -61,6 +62,18 @@ import {
   LogEventModal,
 } from "../components/LogEventModal";
 import { JobTimeline } from "./job/Timeline";
+
+function parseStoredStringArray(value: string | null | undefined): string[] {
+  if (!value) return [];
+  try {
+    const parsed: unknown = JSON.parse(value);
+    return Array.isArray(parsed)
+      ? parsed.filter((item): item is string => typeof item === "string")
+      : [];
+  } catch {
+    return [];
+  }
+}
 
 export const JobPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -336,6 +349,14 @@ export const JobPage: React.FC = () => {
       return [];
     }
   }, [job?.keywordMissing]);
+  const llmFitPoints = React.useMemo(
+    () => parseStoredStringArray(job?.llmFitPoints),
+    [job?.llmFitPoints],
+  );
+  const llmFitGaps = React.useMemo(
+    () => parseStoredStringArray(job?.llmFitGaps),
+    [job?.llmFitGaps],
+  );
   const isClosedStage = currentStage === "closed";
   const canTrackStages = job?.status === "in_progress";
   const canLogEvents = canTrackStages && !isClosedStage;
@@ -545,6 +566,8 @@ export const JobPage: React.FC = () => {
         </div>
       )}
 
+      {job && <CompanyDescription job={job} />}
+
       <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         <Card className="border-border/50">
           <CardHeader>
@@ -608,7 +631,7 @@ export const JobPage: React.FC = () => {
             <CardContent className="space-y-4">
               <div>
                 <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                  Score signals
+                  Local supporting signals
                 </div>
                 <div className="mt-1 text-sm font-medium">
                   Semantic {job?.semanticScore ?? "—"} · Keywords{" "}
@@ -621,8 +644,53 @@ export const JobPage: React.FC = () => {
                 )}
                 {job?.suitabilityReasonSource === "llm" && (
                   <Badge variant="outline" className="mt-2 text-[10px]">
-                    LLM deep analysis
+                    Primary ATS scored by DeepSeek
                   </Badge>
+                )}
+              </div>
+              <div className="border-t border-border/50 pt-4">
+                <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                  DeepSeek ATS assessment
+                </div>
+                {job?.llmFitStatus === "completed" ? (
+                  <div className="mt-1 space-y-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-sm font-semibold">
+                        {job.llmFitScore ?? "—"}/100
+                      </span>
+                      {job.llmFitVerdict && (
+                        <Badge variant="outline" className="capitalize">
+                          {job.llmFitVerdict}
+                        </Badge>
+                      )}
+                      <Badge variant="secondary" className="text-[10px]">
+                        {job.llmFitModel ?? "Agent"}
+                      </Badge>
+                    </div>
+                    {llmFitPoints.length > 0 && (
+                      <div className="text-xs text-emerald-600 dark:text-emerald-400">
+                        Fit: {llmFitPoints.join(" · ")}
+                      </div>
+                    )}
+                    {llmFitGaps.length > 0 && (
+                      <div className="text-xs text-amber-600 dark:text-amber-400">
+                        Gaps: {llmFitGaps.join(" · ")}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="mt-1 text-xs text-muted-foreground">
+                    {job?.llmFitStatus === "pending" &&
+                      "Pending the next eligible Fit Judge run."}
+                    {job?.llmFitStatus === "running" &&
+                      "Evaluation in progress."}
+                    {job?.llmFitStatus === "failed" &&
+                      `Evaluation failed${job.llmFitError ? `: ${job.llmFitError}` : "."}`}
+                    {job?.llmFitStatus === "skipped_stale" &&
+                      "Skipped because the pending posting became stale."}
+                    {!job?.llmFitStatus &&
+                      "Not evaluated. Fit Judge only queues newly imported jobs while enabled."}
+                  </div>
                 )}
               </div>
               <div>

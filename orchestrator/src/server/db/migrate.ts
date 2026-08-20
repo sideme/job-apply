@@ -4,6 +4,7 @@
 
 import { existsSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { classifyJobEngagement } from "@shared/job-engagement";
 import { inferJobLevel } from "@shared/job-level";
 import Database from "better-sqlite3";
 import { getDataDir } from "../config/dataDir";
@@ -81,6 +82,10 @@ const migrations = [
     company_reviews_count INTEGER,
     vacancy_count INTEGER,
     work_from_home_type TEXT,
+    employment_type_category TEXT NOT NULL DEFAULT 'unknown',
+    employment_type_reason TEXT,
+    hiring_organization_category TEXT NOT NULL DEFAULT 'unknown',
+    hiring_organization_reason TEXT,
     title TEXT NOT NULL,
     employer TEXT NOT NULL,
     employer_url TEXT,
@@ -105,6 +110,17 @@ const migrations = [
     job_embedding TEXT,
     job_embedding_model TEXT,
     job_embedding_hash TEXT,
+    llm_fit_score INTEGER,
+    llm_fit_verdict TEXT,
+    llm_fit_points TEXT,
+    llm_fit_gaps TEXT,
+    llm_fit_status TEXT,
+    llm_fit_error TEXT,
+    llm_fit_provider TEXT,
+    llm_fit_model TEXT,
+    llm_fit_prompt_version TEXT,
+    llm_fit_input_hash TEXT,
+    llm_fit_at TEXT,
     tailored_summary TEXT,
     tailored_headline TEXT,
     tailored_skills TEXT,
@@ -125,6 +141,60 @@ const migrations = [
     jobs_discovered INTEGER NOT NULL DEFAULT 0,
     jobs_processed INTEGER NOT NULL DEFAULT 0,
     error_message TEXT
+  )`,
+
+  `CREATE TABLE IF NOT EXISTS agent_runs (
+    id TEXT PRIMARY KEY,
+    pipeline_run_id TEXT,
+    kind TEXT NOT NULL CHECK(kind IN ('search_planner', 'fit_judge')),
+    status TEXT NOT NULL DEFAULT 'running' CHECK(status IN ('running', 'completed', 'partial', 'failed', 'cancelled', 'unavailable')),
+    provider TEXT,
+    model TEXT,
+    prompt_version TEXT,
+    started_at TEXT NOT NULL,
+    completed_at TEXT,
+    local_date TEXT NOT NULL,
+    time_zone TEXT NOT NULL,
+    stop_reason TEXT,
+    error_code TEXT,
+    error_message TEXT,
+    searches_used INTEGER NOT NULL DEFAULT 0,
+    judgments_used INTEGER NOT NULL DEFAULT 0,
+    input_tokens INTEGER NOT NULL DEFAULT 0,
+    output_tokens INTEGER NOT NULL DEFAULT 0,
+    FOREIGN KEY (pipeline_run_id) REFERENCES pipeline_runs(id) ON DELETE SET NULL
+  )`,
+
+  `CREATE TABLE IF NOT EXISTS agent_run_steps (
+    id TEXT PRIMARY KEY,
+    agent_run_id TEXT NOT NULL,
+    job_id TEXT,
+    iteration INTEGER NOT NULL,
+    sequence INTEGER NOT NULL,
+    step_type TEXT NOT NULL CHECK(step_type IN ('llm', 'tool', 'stop', 'error')),
+    tool_name TEXT,
+    tool_call_id TEXT,
+    args_summary TEXT,
+    result_summary TEXT,
+    input_tokens INTEGER,
+    output_tokens INTEGER,
+    duration_ms INTEGER,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY (agent_run_id) REFERENCES agent_runs(id) ON DELETE CASCADE,
+    FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE SET NULL
+  )`,
+
+  `CREATE TABLE IF NOT EXISTS agent_daily_usage (
+    kind TEXT NOT NULL CHECK(kind IN ('search_planner', 'fit_judge')),
+    local_date TEXT NOT NULL,
+    time_zone TEXT NOT NULL,
+    runs_started INTEGER NOT NULL DEFAULT 0,
+    input_tokens INTEGER NOT NULL DEFAULT 0,
+    output_tokens INTEGER NOT NULL DEFAULT 0,
+    searches_used INTEGER NOT NULL DEFAULT 0,
+    judgments_used INTEGER NOT NULL DEFAULT 0,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (kind, local_date, time_zone)
   )`,
 
   `CREATE TABLE IF NOT EXISTS settings (
@@ -300,6 +370,19 @@ const migrations = [
      'openrouterApiKey'
    )`,
 
+  // DeepSeek discontinued the legacy direct-API model aliases on 2026-07-24.
+  // Migrate only direct DeepSeek configurations; other providers may use their
+  // own routing aliases. Empty task overrides remain empty and keep inheriting.
+  `UPDATE settings
+   SET value = 'deepseek-v4-flash', updated_at = datetime('now')
+   WHERE key IN ('model', 'modelScorer', 'modelTailoring', 'modelProjectSelection')
+     AND value IN ('deepseek-chat', 'deepseek-reasoner')
+     AND EXISTS (
+       SELECT 1 FROM settings AS provider
+       WHERE provider.key = 'llmProvider'
+         AND lower(replace(provider.value, '-', '_')) = 'deepseek'
+     )`,
+
   // Add source column for existing databases (safe to skip if already present)
   `ALTER TABLE jobs ADD COLUMN source TEXT NOT NULL DEFAULT 'gradcracker'`,
   `UPDATE jobs SET source = 'gradcracker' WHERE source IS NULL OR source = ''`,
@@ -335,6 +418,10 @@ const migrations = [
   `ALTER TABLE jobs ADD COLUMN company_reviews_count INTEGER`,
   `ALTER TABLE jobs ADD COLUMN vacancy_count INTEGER`,
   `ALTER TABLE jobs ADD COLUMN work_from_home_type TEXT`,
+  `ALTER TABLE jobs ADD COLUMN employment_type_category TEXT NOT NULL DEFAULT 'unknown'`,
+  `ALTER TABLE jobs ADD COLUMN employment_type_reason TEXT`,
+  `ALTER TABLE jobs ADD COLUMN hiring_organization_category TEXT NOT NULL DEFAULT 'unknown'`,
+  `ALTER TABLE jobs ADD COLUMN hiring_organization_reason TEXT`,
   `CREATE INDEX IF NOT EXISTS idx_jobs_duplicate_of_job_id ON jobs(duplicate_of_job_id)`,
   `ALTER TABLE jobs ADD COLUMN selected_project_ids TEXT`,
   `ALTER TABLE jobs ADD COLUMN tailored_headline TEXT`,
@@ -381,6 +468,37 @@ const migrations = [
   `ALTER TABLE jobs ADD COLUMN job_embedding_model TEXT`,
   `ALTER TABLE jobs ADD COLUMN job_embedding_hash TEXT`,
   `ALTER TABLE jobs ADD COLUMN suitability_reason_source TEXT`,
+  `ALTER TABLE jobs ADD COLUMN llm_fit_score INTEGER`,
+  `ALTER TABLE jobs ADD COLUMN llm_fit_verdict TEXT`,
+  `ALTER TABLE jobs ADD COLUMN llm_fit_points TEXT`,
+  `ALTER TABLE jobs ADD COLUMN llm_fit_gaps TEXT`,
+  `ALTER TABLE jobs ADD COLUMN llm_fit_status TEXT`,
+  `ALTER TABLE jobs ADD COLUMN llm_fit_error TEXT`,
+  `ALTER TABLE jobs ADD COLUMN llm_fit_provider TEXT`,
+  `ALTER TABLE jobs ADD COLUMN llm_fit_model TEXT`,
+  `ALTER TABLE jobs ADD COLUMN llm_fit_prompt_version TEXT`,
+  `ALTER TABLE jobs ADD COLUMN llm_fit_input_hash TEXT`,
+  `ALTER TABLE jobs ADD COLUMN llm_fit_at TEXT`,
+
+  // A completed DeepSeek Fit judgment is the primary ATS score. Keep the
+  // local semantic and keyword columns as supporting, explainable signals.
+  `UPDATE jobs
+   SET
+     suitability_score = llm_fit_score,
+     suitability_reason = CASE
+       WHEN lower(COALESCE(llm_fit_provider, '')) = 'deepseek'
+         THEN 'DeepSeek ATS ' || llm_fit_score || ' · ' || COALESCE(llm_fit_verdict, 'fit') || ' · ' || COALESCE(llm_fit_model, 'model')
+       ELSE COALESCE(llm_fit_provider, 'LLM') || ' ATS ' || llm_fit_score || ' · ' || COALESCE(llm_fit_verdict, 'fit') || ' · ' || COALESCE(llm_fit_model, 'model')
+     END,
+     suitability_reason_source = 'llm',
+     updated_at = datetime('now')
+   WHERE llm_fit_status = 'completed'
+     AND llm_fit_score IS NOT NULL
+     AND (
+       suitability_score IS NULL
+       OR suitability_score != llm_fit_score
+       OR COALESCE(suitability_reason_source, '') != 'llm'
+     )`,
 
   // Protect child tables (stage_events/tasks/interviews) during parent table rebuilds.
   // Without this, dropping/replacing `jobs` can cascade-delete historical stage data.
@@ -439,6 +557,10 @@ const migrations = [
     company_reviews_count INTEGER,
     vacancy_count INTEGER,
     work_from_home_type TEXT,
+    employment_type_category TEXT NOT NULL DEFAULT 'unknown',
+    employment_type_reason TEXT,
+    hiring_organization_category TEXT NOT NULL DEFAULT 'unknown',
+    hiring_organization_reason TEXT,
     title TEXT NOT NULL,
     employer TEXT NOT NULL,
     employer_url TEXT,
@@ -463,6 +585,17 @@ const migrations = [
     job_embedding TEXT,
     job_embedding_model TEXT,
     job_embedding_hash TEXT,
+    llm_fit_score INTEGER,
+    llm_fit_verdict TEXT,
+    llm_fit_points TEXT,
+    llm_fit_gaps TEXT,
+    llm_fit_status TEXT,
+    llm_fit_error TEXT,
+    llm_fit_provider TEXT,
+    llm_fit_model TEXT,
+    llm_fit_prompt_version TEXT,
+    llm_fit_input_hash TEXT,
+    llm_fit_at TEXT,
     tailored_summary TEXT,
     tailored_headline TEXT,
     tailored_skills TEXT,
@@ -480,10 +613,15 @@ const migrations = [
     salary_min_amount, salary_max_amount, salary_currency, is_remote, job_level, job_level_category, job_function, listing_type,
     emails, company_industry, company_logo, company_url_direct, company_addresses, company_num_employees,
     company_revenue, company_description, skills, experience_range, company_rating, company_reviews_count,
-    vacancy_count, work_from_home_type, title, employer, employer_url, job_url, application_link, disciplines,
+    vacancy_count, work_from_home_type, employment_type_category, employment_type_reason,
+    hiring_organization_category, hiring_organization_reason,
+    title, employer, employer_url, job_url, application_link, disciplines,
     deadline, salary, location, degree_required, starting, job_description, status, outcome, closed_at,
     suitability_score, suitability_reason, suitability_reason_source, semantic_score, keyword_coverage,
-    keyword_missing, job_embedding, job_embedding_model, job_embedding_hash, tailored_summary, tailored_headline, tailored_skills,
+    keyword_missing, job_embedding, job_embedding_model, job_embedding_hash,
+    llm_fit_score, llm_fit_verdict, llm_fit_points, llm_fit_gaps, llm_fit_status, llm_fit_error,
+    llm_fit_provider, llm_fit_model, llm_fit_prompt_version, llm_fit_input_hash, llm_fit_at,
+    tailored_summary, tailored_headline, tailored_skills,
     selected_project_ids, pdf_path, duplicate_of_job_id,
     discovered_at, processed_at,
     applied_at, created_at, updated_at
@@ -493,10 +631,15 @@ const migrations = [
     salary_min_amount, salary_max_amount, salary_currency, is_remote, job_level, job_level_category, job_function, listing_type,
     emails, company_industry, company_logo, company_url_direct, company_addresses, company_num_employees,
     company_revenue, company_description, skills, experience_range, company_rating, company_reviews_count,
-    vacancy_count, work_from_home_type, title, employer, employer_url, job_url, application_link, disciplines,
+    vacancy_count, work_from_home_type, employment_type_category, employment_type_reason,
+    hiring_organization_category, hiring_organization_reason,
+    title, employer, employer_url, job_url, application_link, disciplines,
     deadline, salary, location, degree_required, starting, job_description, status, outcome, closed_at,
     suitability_score, suitability_reason, suitability_reason_source, semantic_score, keyword_coverage,
-    keyword_missing, job_embedding, job_embedding_model, job_embedding_hash, tailored_summary, tailored_headline, tailored_skills,
+    keyword_missing, job_embedding, job_embedding_model, job_embedding_hash,
+    llm_fit_score, llm_fit_verdict, llm_fit_points, llm_fit_gaps, llm_fit_status, llm_fit_error,
+    llm_fit_provider, llm_fit_model, llm_fit_prompt_version, llm_fit_input_hash, llm_fit_at,
+    tailored_summary, tailored_headline, tailored_skills,
     selected_project_ids, pdf_path, duplicate_of_job_id,
     discovered_at, processed_at,
     applied_at, created_at, updated_at
@@ -512,6 +655,9 @@ const migrations = [
   `CREATE INDEX IF NOT EXISTS idx_jobs_status_discovered_at ON jobs(status, discovered_at)`,
   `CREATE INDEX IF NOT EXISTS idx_jobs_date_posted_score ON jobs(date_posted DESC, suitability_score DESC)`,
   `CREATE INDEX IF NOT EXISTS idx_jobs_level_status_posted ON jobs(job_level_category, status, date_posted DESC)`,
+  `CREATE INDEX IF NOT EXISTS idx_jobs_employment_status_posted ON jobs(employment_type_category, status, date_posted DESC)`,
+  `CREATE INDEX IF NOT EXISTS idx_jobs_llm_fit_pending_score ON jobs(llm_fit_status, suitability_score DESC, date_posted DESC)`,
+  `CREATE INDEX IF NOT EXISTS idx_jobs_fit_queue ON jobs(llm_fit_status, status, suitability_score DESC, discovered_at DESC)`,
   `CREATE VIRTUAL TABLE IF NOT EXISTS jobs_fts USING fts5(
     title,
     employer,
@@ -542,6 +688,10 @@ const migrations = [
     updated_at TEXT NOT NULL
   )`,
   `CREATE INDEX IF NOT EXISTS idx_pipeline_runs_started_at ON pipeline_runs(started_at)`,
+  `CREATE INDEX IF NOT EXISTS idx_agent_runs_kind_date_status ON agent_runs(kind, local_date, status)`,
+  `CREATE INDEX IF NOT EXISTS idx_agent_runs_pipeline_run_id ON agent_runs(pipeline_run_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_agent_run_steps_run_sequence ON agent_run_steps(agent_run_id, sequence)`,
+  `CREATE INDEX IF NOT EXISTS idx_agent_run_steps_job_id ON agent_run_steps(job_id)`,
   `CREATE INDEX IF NOT EXISTS idx_stage_events_application_id ON stage_events(application_id)`,
   `CREATE INDEX IF NOT EXISTS idx_stage_events_occurred_at ON stage_events(occurred_at)`,
   `CREATE INDEX IF NOT EXISTS idx_tasks_application_id ON tasks(application_id)`,
@@ -742,6 +892,66 @@ const normalizeJobLevels = sqlite.transaction(() => {
 });
 normalizeJobLevels();
 console.log(`📊 Job levels normalized: ${normalizedJobLevels}`);
+
+const engagementRows = sqlite
+  .prepare(
+    `SELECT
+      id,
+      title,
+      employer,
+      job_type AS jobType,
+      listing_type AS listingType,
+      job_description AS jobDescription,
+      company_description AS companyDescription,
+      employment_type_category AS employmentTypeCategory,
+      employment_type_reason AS employmentTypeReason,
+      hiring_organization_category AS hiringOrganizationCategory,
+      hiring_organization_reason AS hiringOrganizationReason
+    FROM jobs`,
+  )
+  .all() as Array<{
+  id: string;
+  title: string;
+  employer: string;
+  jobType: string | null;
+  listingType: string | null;
+  jobDescription: string | null;
+  companyDescription: string | null;
+  employmentTypeCategory: string | null;
+  employmentTypeReason: string | null;
+  hiringOrganizationCategory: string | null;
+  hiringOrganizationReason: string | null;
+}>;
+const updateJobEngagement = sqlite.prepare(
+  `UPDATE jobs
+   SET employment_type_category = ?, employment_type_reason = ?,
+       hiring_organization_category = ?, hiring_organization_reason = ?
+   WHERE id = ?`,
+);
+let normalizedJobEngagements = 0;
+const normalizeJobEngagements = sqlite.transaction(() => {
+  for (const row of engagementRows) {
+    const classification = classifyJobEngagement(row);
+    if (
+      classification.employmentTypeCategory !== row.employmentTypeCategory ||
+      classification.employmentTypeReason !== row.employmentTypeReason ||
+      classification.hiringOrganizationCategory !==
+        row.hiringOrganizationCategory ||
+      classification.hiringOrganizationReason !== row.hiringOrganizationReason
+    ) {
+      updateJobEngagement.run(
+        classification.employmentTypeCategory,
+        classification.employmentTypeReason,
+        classification.hiringOrganizationCategory,
+        classification.hiringOrganizationReason,
+        row.id,
+      );
+      normalizedJobEngagements += 1;
+    }
+  }
+});
+normalizeJobEngagements();
+console.log(`💼 Job engagement types normalized: ${normalizedJobEngagements}`);
 
 const postingDateRows = sqlite
   .prepare(

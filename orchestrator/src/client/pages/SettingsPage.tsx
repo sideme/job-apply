@@ -1,6 +1,8 @@
 import * as api from "@client/api";
 import { PageHeader } from "@client/components/layout";
 import { useUpdateSettingsMutation } from "@client/hooks/queries/useSettingsMutation";
+import { AgentRunsSection } from "@client/pages/settings/components/AgentRunsSection";
+import { AgentSettingsSection } from "@client/pages/settings/components/AgentSettingsSection";
 import { BackupSettingsSection } from "@client/pages/settings/components/BackupSettingsSection";
 import { ChatSettingsSection } from "@client/pages/settings/components/ChatSettingsSection";
 import { DangerZoneSection } from "@client/pages/settings/components/DangerZoneSection";
@@ -38,6 +40,21 @@ const DEFAULT_FORM_VALUES: UpdateSettingsInput = {
   modelScorer: "",
   modelTailoring: "",
   modelProjectSelection: "",
+  agentModel: "",
+  agenticDiscoveryEnabled: null,
+  agenticFitJudgeEnabled: null,
+  agentMaxRunsPerLocalDay: null,
+  agentMaxSearchIterations: null,
+  agentMaxSearchesPerRun: null,
+  agentMaxLinkedinSearches: null,
+  agentMaxAdzunaSearches: null,
+  agentStopWhenNewBelow: null,
+  agentMaxFitJudgments: null,
+  agentFitPendingTtlDays: null,
+  agentMaxInputTokensPerRun: null,
+  agentMaxOutputTokensPerRun: null,
+  agentMaxJdChars: null,
+  agentRequestTimeoutMs: null,
   companyModelRules: [],
   llmProvider: null,
   llmBaseUrl: "",
@@ -89,6 +106,21 @@ const NULL_SETTINGS_PAYLOAD: UpdateSettingsInput = {
   modelScorer: null,
   modelTailoring: null,
   modelProjectSelection: null,
+  agentModel: null,
+  agenticDiscoveryEnabled: null,
+  agenticFitJudgeEnabled: null,
+  agentMaxRunsPerLocalDay: null,
+  agentMaxSearchIterations: null,
+  agentMaxSearchesPerRun: null,
+  agentMaxLinkedinSearches: null,
+  agentMaxAdzunaSearches: null,
+  agentStopWhenNewBelow: null,
+  agentMaxFitJudgments: null,
+  agentFitPendingTtlDays: null,
+  agentMaxInputTokensPerRun: null,
+  agentMaxOutputTokensPerRun: null,
+  agentMaxJdChars: null,
+  agentRequestTimeoutMs: null,
   companyModelRules: null,
   llmProvider: null,
   llmBaseUrl: null,
@@ -135,6 +167,21 @@ const mapSettingsToForm = (data: AppSettings): UpdateSettingsInput => ({
   modelScorer: data.modelScorer.override ?? "",
   modelTailoring: data.modelTailoring.override ?? "",
   modelProjectSelection: data.modelProjectSelection.override ?? "",
+  agentModel: data.agentModel.override ?? "",
+  agenticDiscoveryEnabled: data.agenticDiscoveryEnabled.override,
+  agenticFitJudgeEnabled: data.agenticFitJudgeEnabled.override,
+  agentMaxRunsPerLocalDay: data.agentMaxRunsPerLocalDay.override,
+  agentMaxSearchIterations: data.agentMaxSearchIterations.override,
+  agentMaxSearchesPerRun: data.agentMaxSearchesPerRun.override,
+  agentMaxLinkedinSearches: data.agentMaxLinkedinSearches.override,
+  agentMaxAdzunaSearches: data.agentMaxAdzunaSearches.override,
+  agentStopWhenNewBelow: data.agentStopWhenNewBelow.override,
+  agentMaxFitJudgments: data.agentMaxFitJudgments.override,
+  agentFitPendingTtlDays: data.agentFitPendingTtlDays.override,
+  agentMaxInputTokensPerRun: data.agentMaxInputTokensPerRun.override,
+  agentMaxOutputTokensPerRun: data.agentMaxOutputTokensPerRun.override,
+  agentMaxJdChars: data.agentMaxJdChars.override,
+  agentRequestTimeoutMs: data.agentRequestTimeoutMs.override,
   companyModelRules: data.companyModelRules.override ?? [],
   llmProvider: normalizeLlmProviderValue(data.llmProvider.override),
   llmBaseUrl: data.llmBaseUrl.override ?? "",
@@ -285,6 +332,66 @@ const getDerivedSettings = (settings: AppSettings | null) => {
     },
     defaultResumeProjects: settings?.resumeProjects?.default ?? null,
 
+    agent: {
+      model: settings?.agentModel?.value ?? "",
+      discoveryEnabled: {
+        effective: settings?.agenticDiscoveryEnabled?.value ?? false,
+        default: settings?.agenticDiscoveryEnabled?.default ?? false,
+      },
+      fitJudgeEnabled: {
+        effective: settings?.agenticFitJudgeEnabled?.value ?? false,
+        default: settings?.agenticFitJudgeEnabled?.default ?? false,
+      },
+      maxRunsPerLocalDay: {
+        effective: settings?.agentMaxRunsPerLocalDay?.value ?? 1,
+        default: settings?.agentMaxRunsPerLocalDay?.default ?? 1,
+      },
+      maxSearchIterations: {
+        effective: settings?.agentMaxSearchIterations?.value ?? 6,
+        default: settings?.agentMaxSearchIterations?.default ?? 6,
+      },
+      maxSearchesPerRun: {
+        effective: settings?.agentMaxSearchesPerRun?.value ?? 10,
+        default: settings?.agentMaxSearchesPerRun?.default ?? 10,
+      },
+      maxLinkedinSearches: {
+        effective: settings?.agentMaxLinkedinSearches?.value ?? 2,
+        default: settings?.agentMaxLinkedinSearches?.default ?? 2,
+      },
+      maxAdzunaSearches: {
+        effective: settings?.agentMaxAdzunaSearches?.value ?? 3,
+        default: settings?.agentMaxAdzunaSearches?.default ?? 3,
+      },
+      stopWhenNewBelow: {
+        effective: settings?.agentStopWhenNewBelow?.value ?? 3,
+        default: settings?.agentStopWhenNewBelow?.default ?? 3,
+      },
+      maxFitJudgments: {
+        effective: settings?.agentMaxFitJudgments?.value ?? 20,
+        default: settings?.agentMaxFitJudgments?.default ?? 20,
+      },
+      fitPendingTtlDays: {
+        effective: settings?.agentFitPendingTtlDays?.value ?? 7,
+        default: settings?.agentFitPendingTtlDays?.default ?? 7,
+      },
+      maxInputTokensPerRun: {
+        effective: settings?.agentMaxInputTokensPerRun?.value ?? 100000,
+        default: settings?.agentMaxInputTokensPerRun?.default ?? 100000,
+      },
+      maxOutputTokensPerRun: {
+        effective: settings?.agentMaxOutputTokensPerRun?.value ?? 12000,
+        default: settings?.agentMaxOutputTokensPerRun?.default ?? 12000,
+      },
+      maxJdChars: {
+        effective: settings?.agentMaxJdChars?.value ?? 12000,
+        default: settings?.agentMaxJdChars?.default ?? 12000,
+      },
+      requestTimeoutMs: {
+        effective: settings?.agentRequestTimeoutMs?.value ?? 60000,
+        default: settings?.agentRequestTimeoutMs?.default ?? 60000,
+      },
+    },
+
     backup: {
       backupEnabled: {
         effective: settings?.backupEnabled?.value ?? false,
@@ -387,6 +494,7 @@ export const SettingsPage: React.FC = () => {
     chat,
     envSettings,
     defaultResumeProjects,
+    agent,
     backup,
     scoring,
   } = derived;
@@ -523,6 +631,63 @@ export const SettingsPage: React.FC = () => {
         modelScorer: normalizeString(data.modelScorer),
         modelTailoring: normalizeString(data.modelTailoring),
         modelProjectSelection: normalizeString(data.modelProjectSelection),
+        agentModel: normalizeString(data.agentModel),
+        agenticDiscoveryEnabled: nullIfSame(
+          data.agenticDiscoveryEnabled,
+          agent.discoveryEnabled.default,
+        ),
+        agenticFitJudgeEnabled: nullIfSame(
+          data.agenticFitJudgeEnabled,
+          agent.fitJudgeEnabled.default,
+        ),
+        agentMaxRunsPerLocalDay: nullIfSame(
+          data.agentMaxRunsPerLocalDay,
+          agent.maxRunsPerLocalDay.default,
+        ),
+        agentMaxSearchIterations: nullIfSame(
+          data.agentMaxSearchIterations,
+          agent.maxSearchIterations.default,
+        ),
+        agentMaxSearchesPerRun: nullIfSame(
+          data.agentMaxSearchesPerRun,
+          agent.maxSearchesPerRun.default,
+        ),
+        agentMaxLinkedinSearches: nullIfSame(
+          data.agentMaxLinkedinSearches,
+          agent.maxLinkedinSearches.default,
+        ),
+        agentMaxAdzunaSearches: nullIfSame(
+          data.agentMaxAdzunaSearches,
+          agent.maxAdzunaSearches.default,
+        ),
+        agentStopWhenNewBelow: nullIfSame(
+          data.agentStopWhenNewBelow,
+          agent.stopWhenNewBelow.default,
+        ),
+        agentMaxFitJudgments: nullIfSame(
+          data.agentMaxFitJudgments,
+          agent.maxFitJudgments.default,
+        ),
+        agentFitPendingTtlDays: nullIfSame(
+          data.agentFitPendingTtlDays,
+          agent.fitPendingTtlDays.default,
+        ),
+        agentMaxInputTokensPerRun: nullIfSame(
+          data.agentMaxInputTokensPerRun,
+          agent.maxInputTokensPerRun.default,
+        ),
+        agentMaxOutputTokensPerRun: nullIfSame(
+          data.agentMaxOutputTokensPerRun,
+          agent.maxOutputTokensPerRun.default,
+        ),
+        agentMaxJdChars: nullIfSame(
+          data.agentMaxJdChars,
+          agent.maxJdChars.default,
+        ),
+        agentRequestTimeoutMs: nullIfSame(
+          data.agentRequestTimeoutMs,
+          agent.requestTimeoutMs.default,
+        ),
         companyModelRules:
           data.companyModelRules && data.companyModelRules.length > 0
             ? data.companyModelRules
@@ -738,6 +903,12 @@ export const SettingsPage: React.FC = () => {
             isLoading={isLoading}
             isSaving={isSaving}
           />
+          <AgentSettingsSection
+            values={agent}
+            isLoading={isLoading}
+            isSaving={isSaving}
+          />
+          <AgentRunsSection />
           <WebhooksSection
             pipelineWebhook={pipelineWebhook}
             jobCompleteWebhook={jobCompleteWebhook}

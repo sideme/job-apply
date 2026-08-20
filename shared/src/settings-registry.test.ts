@@ -62,6 +62,16 @@ describe("settingsRegistry helpers", () => {
         20000,
       );
     });
+
+    it("keeps agent budgets bounded", () => {
+      expect(settingsRegistry.agentMaxRunsPerLocalDay.default()).toBe(1);
+      expect(settingsRegistry.agentMaxRunsPerLocalDay.parse("10")).toBe(5);
+      expect(settingsRegistry.agentMaxSearchesPerRun.parse("0")).toBe(1);
+      expect(settingsRegistry.agentMaxInputTokensPerRun.parse("9999999")).toBe(
+        500000,
+      );
+      expect(settingsRegistry.agentRequestTimeoutMs.parse("1")).toBe(5000);
+    });
   });
 
   describe("boolean (bit-bool) parsing and serialization", () => {
@@ -74,6 +84,11 @@ describe("settingsRegistry helpers", () => {
       expect(settingsRegistry.embeddingEnabled.default()).toBe(false);
       expect(settingsRegistry.embeddingEnabled.parse("1")).toBe(true);
       expect(settingsRegistry.embeddingEnabled.serialize(false)).toBe("0");
+    });
+
+    it("keeps both agent paths opt-in", () => {
+      expect(settingsRegistry.agenticDiscoveryEnabled.default()).toBe(false);
+      expect(settingsRegistry.agenticFitJudgeEnabled.default()).toBe(false);
     });
   });
 

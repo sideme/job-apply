@@ -5,6 +5,7 @@ import {
   JobHeader,
   TailoredSummary,
 } from "@client/components";
+import { CompanyDescription } from "@client/components/CompanyDescription";
 import { JobDetailsEditDrawer } from "@client/components/JobDetailsEditDrawer";
 import { ReadyPanel } from "@client/components/ReadyPanel";
 import { TailoringEditor } from "@client/components/TailoringEditor";
@@ -619,6 +620,8 @@ export const JobDetailPanel: React.FC<JobDetailPanelProps> = ({
               </div>
             </div>
           </div>
+
+          <CompanyDescription job={selectedJob} compact />
 
           <div className="space-y-1.5">
             <button

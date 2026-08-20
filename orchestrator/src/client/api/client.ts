@@ -4,12 +4,15 @@
 
 import type { UpdateSettingsInput } from "@shared/settings-schema";
 import type {
+  AgentRunStepsPage,
+  AgentRunsPage,
   ApiResponse,
   ApplicationStage,
   ApplicationTask,
   AppSettings,
   BackupInfo,
   DemoInfoResponse,
+  EmploymentTypeCategory,
   Job,
   JobActionRequest,
   JobActionResponse,
@@ -354,6 +357,8 @@ export function getJobs(options: {
   search?: string;
   jobLevels?: JobLevel[];
   sources?: JobSource[];
+  employmentTypes?: EmploymentTypeCategory[];
+  discoveredDate?: string;
   limit?: number;
   offset?: number;
 }): Promise<JobsListResponse<JobListItem>>;
@@ -363,6 +368,8 @@ export function getJobs(options?: {
   search?: string;
   jobLevels?: JobLevel[];
   sources?: JobSource[];
+  employmentTypes?: EmploymentTypeCategory[];
+  discoveredDate?: string;
   limit?: number;
   offset?: number;
 }): Promise<JobsListResponse<Job>>;
@@ -372,6 +379,8 @@ export async function getJobs(options?: {
   search?: string;
   jobLevels?: JobLevel[];
   sources?: JobSource[];
+  employmentTypes?: EmploymentTypeCategory[];
+  discoveredDate?: string;
   limit?: number;
   offset?: number;
 }): Promise<JobsListResponse<Job> | JobsListResponse<JobListItem>> {
@@ -383,6 +392,10 @@ export async function getJobs(options?: {
   if (options?.jobLevels?.length)
     params.set("level", options.jobLevels.join(","));
   if (options?.sources?.length) params.set("source", options.sources.join(","));
+  if (options?.employmentTypes?.length)
+    params.set("employment", options.employmentTypes.join(","));
+  if (options?.discoveredDate)
+    params.set("discoveredDate", options.discoveredDate);
   if (options?.limit != null) params.set("limit", String(options.limit));
   if (options?.offset != null) params.set("offset", String(options.offset));
   const query = params.toString();
@@ -396,6 +409,8 @@ export async function getJobsRevision(options?: {
   search?: string;
   jobLevels?: JobLevel[];
   sources?: JobSource[];
+  employmentTypes?: EmploymentTypeCategory[];
+  discoveredDate?: string;
 }): Promise<JobsRevisionResponse> {
   const params = new URLSearchParams();
   if (options?.statuses?.length)
@@ -404,6 +419,10 @@ export async function getJobsRevision(options?: {
   if (options?.jobLevels?.length)
     params.set("level", options.jobLevels.join(","));
   if (options?.sources?.length) params.set("source", options.sources.join(","));
+  if (options?.employmentTypes?.length)
+    params.set("employment", options.employmentTypes.join(","));
+  if (options?.discoveredDate)
+    params.set("discoveredDate", options.discoveredDate);
   const query = params.toString();
   return fetchApi<JobsRevisionResponse>(
     `/jobs/revision${query ? `?${query}` : ""}`,
@@ -1196,6 +1215,23 @@ export async function getSettings(): Promise<AppSettings> {
   });
 
   return settingsPromise;
+}
+
+export async function getAgentRuns(
+  limit = 20,
+  offset = 0,
+): Promise<AgentRunsPage> {
+  return fetchApi<AgentRunsPage>(`/agent-runs?limit=${limit}&offset=${offset}`);
+}
+
+export async function getAgentRunSteps(
+  runId: string,
+  limit = 100,
+  offset = 0,
+): Promise<AgentRunStepsPage> {
+  return fetchApi<AgentRunStepsPage>(
+    `/agent-runs/${encodeURIComponent(runId)}/steps?limit=${limit}&offset=${offset}`,
+  );
 }
 
 export async function getProfileProjects(): Promise<

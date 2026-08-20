@@ -15,6 +15,7 @@ import { getDataDir } from "../config/dataDir";
 import * as jobsRepo from "../repositories/jobs";
 import * as pipelineRepo from "../repositories/pipeline";
 import { getSetting } from "../repositories/settings";
+import { runFitJudge } from "../services/agent/fit-judge";
 import { getLocalResumeStatus } from "../services/local-resume";
 import { generatePdf } from "../services/pdf";
 import { enrichRecentPostingDates } from "../services/posting-date-enrichment";
@@ -28,7 +29,7 @@ import { generateTailoring } from "../services/summary";
 import { notifyHighMatchJobs } from "../services/whatsapp";
 import { progressHelpers, resetProgress } from "./progress";
 import {
-  discoverJobsStep,
+  discoverJobsWithAgentFallbackStep,
   importJobsStep,
   loadProfileStep,
   notifyPipelineWebhookStep,
@@ -54,6 +55,7 @@ const DEFAULT_CONFIG: PipelineConfig = {
 let isPipelineRunning = false;
 let activePipelineRunId: string | null = null;
 let cancelRequestedAt: string | null = null;
+let activePipelineAbortController: AbortController | null = null;
 
 class PipelineCancelledError extends Error {
   constructor(message = "Pipeline cancellation requested") {
@@ -91,6 +93,8 @@ export async function runPipeline(
   isPipelineRunning = true;
   activePipelineRunId = "pending";
   cancelRequestedAt = null;
+  const runAbortController = new AbortController();
+  activePipelineAbortController = runAbortController;
   resetProgress();
   const mergedConfig = { ...DEFAULT_CONFIG, ...config };
 
@@ -113,8 +117,11 @@ export async function runPipeline(
       const profile = await loadProfileStep();
 
       ensureNotCancelled();
-      const { discoveredJobs } = await discoverJobsStep({
+      const { discoveredJobs } = await discoverJobsWithAgentFallbackStep({
+        pipelineRunId: pipelineRun.id,
         mergedConfig,
+        profile,
+        signal: runAbortController.signal,
         shouldCancel: () => cancelRequestedAt !== null,
       });
 
@@ -140,6 +147,24 @@ export async function runPipeline(
         profile,
         jobIds: createdJobIds,
         shouldCancel: () => cancelRequestedAt !== null,
+      });
+
+      ensureNotCancelled();
+      const fitJudgeResult = await runFitJudge({
+        pipelineRunId: pipelineRun.id,
+        newJobIds: createdJobIds,
+        signal: runAbortController.signal,
+      });
+      pipelineLogger.info("Fit Judge step complete", {
+        enabled: fitJudgeResult.enabled,
+        started: fitJudgeResult.started,
+        stopReason: fitJudgeResult.stopReason,
+        enqueued: fitJudgeResult.enqueued,
+        judged: fitJudgeResult.judged,
+        cacheHits: fitJudgeResult.cacheHits,
+        failed: fitJudgeResult.failed,
+        inputTokens: fitJudgeResult.inputTokens,
+        outputTokens: fitJudgeResult.outputTokens,
       });
 
       ensureNotCancelled();
@@ -236,6 +261,7 @@ export async function runPipeline(
       isPipelineRunning = false;
       activePipelineRunId = null;
       cancelRequestedAt = null;
+      activePipelineAbortController = null;
     }
   });
 }
@@ -473,6 +499,7 @@ export function requestPipelineCancel(): {
   }
 
   cancelRequestedAt = new Date().toISOString();
+  activePipelineAbortController?.abort();
   return {
     accepted: true,
     pipelineRunId,

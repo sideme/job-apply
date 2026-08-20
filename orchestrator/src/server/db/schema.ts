@@ -3,15 +3,22 @@
  */
 
 import {
+  AGENT_RUN_KINDS,
+  AGENT_RUN_STATUSES,
+  AGENT_STEP_TYPES,
   APPLICATION_OUTCOMES,
   APPLICATION_STAGES,
   APPLICATION_TASK_TYPES,
+  EMPLOYMENT_TYPE_CATEGORIES,
+  HIRING_ORGANIZATION_CATEGORIES,
   INTERVIEW_OUTCOMES,
   INTERVIEW_TYPES,
   JOB_CHAT_MESSAGE_ROLES,
   JOB_CHAT_MESSAGE_STATUSES,
   JOB_CHAT_RUN_STATUSES,
   JOB_LEVELS,
+  LLM_FIT_STATUSES,
+  LLM_FIT_VERDICTS,
   POST_APPLICATION_INTEGRATION_STATUSES,
   POST_APPLICATION_MESSAGE_TYPES,
   POST_APPLICATION_PROCESSING_STATUSES,
@@ -23,6 +30,7 @@ import { sql } from "drizzle-orm";
 import {
   index,
   integer,
+  primaryKey,
   real,
   sqliteTable,
   text,
@@ -78,6 +86,18 @@ export const jobs = sqliteTable("jobs", {
   companyReviewsCount: integer("company_reviews_count"),
   vacancyCount: integer("vacancy_count"),
   workFromHomeType: text("work_from_home_type"),
+  employmentTypeCategory: text("employment_type_category", {
+    enum: EMPLOYMENT_TYPE_CATEGORIES,
+  })
+    .notNull()
+    .default("unknown"),
+  employmentTypeReason: text("employment_type_reason"),
+  hiringOrganizationCategory: text("hiring_organization_category", {
+    enum: HIRING_ORGANIZATION_CATEGORIES,
+  })
+    .notNull()
+    .default("unknown"),
+  hiringOrganizationReason: text("hiring_organization_reason"),
 
   // Orchestrator enrichments
   status: text("status", {
@@ -106,6 +126,17 @@ export const jobs = sqliteTable("jobs", {
   jobEmbedding: text("job_embedding"),
   jobEmbeddingModel: text("job_embedding_model"),
   jobEmbeddingHash: text("job_embedding_hash"),
+  llmFitScore: integer("llm_fit_score"),
+  llmFitVerdict: text("llm_fit_verdict", { enum: LLM_FIT_VERDICTS }),
+  llmFitPoints: text("llm_fit_points"),
+  llmFitGaps: text("llm_fit_gaps"),
+  llmFitStatus: text("llm_fit_status", { enum: LLM_FIT_STATUSES }),
+  llmFitError: text("llm_fit_error"),
+  llmFitProvider: text("llm_fit_provider"),
+  llmFitModel: text("llm_fit_model"),
+  llmFitPromptVersion: text("llm_fit_prompt_version"),
+  llmFitInputHash: text("llm_fit_input_hash"),
+  llmFitAt: text("llm_fit_at"),
   tailoredSummary: text("tailored_summary"),
   tailoredHeadline: text("tailored_headline"),
   tailoredSkills: text("tailored_skills"),
@@ -172,6 +203,96 @@ export const pipelineRuns = sqliteTable("pipeline_runs", {
   jobsProcessed: integer("jobs_processed").notNull().default(0),
   errorMessage: text("error_message"),
 });
+
+export const agentRuns = sqliteTable(
+  "agent_runs",
+  {
+    id: text("id").primaryKey(),
+    pipelineRunId: text("pipeline_run_id").references(() => pipelineRuns.id, {
+      onDelete: "set null",
+    }),
+    kind: text("kind", { enum: AGENT_RUN_KINDS }).notNull(),
+    status: text("status", { enum: AGENT_RUN_STATUSES })
+      .notNull()
+      .default("running"),
+    provider: text("provider"),
+    model: text("model"),
+    promptVersion: text("prompt_version"),
+    startedAt: text("started_at").notNull(),
+    completedAt: text("completed_at"),
+    localDate: text("local_date").notNull(),
+    timeZone: text("time_zone").notNull(),
+    stopReason: text("stop_reason"),
+    errorCode: text("error_code"),
+    errorMessage: text("error_message"),
+    searchesUsed: integer("searches_used").notNull().default(0),
+    judgmentsUsed: integer("judgments_used").notNull().default(0),
+    inputTokens: integer("input_tokens").notNull().default(0),
+    outputTokens: integer("output_tokens").notNull().default(0),
+  },
+  (table) => ({
+    kindDateStatusIndex: index("idx_agent_runs_kind_date_status").on(
+      table.kind,
+      table.localDate,
+      table.status,
+    ),
+    pipelineRunIndex: index("idx_agent_runs_pipeline_run_id").on(
+      table.pipelineRunId,
+    ),
+  }),
+);
+
+export const agentRunSteps = sqliteTable(
+  "agent_run_steps",
+  {
+    id: text("id").primaryKey(),
+    agentRunId: text("agent_run_id")
+      .notNull()
+      .references(() => agentRuns.id, { onDelete: "cascade" }),
+    jobId: text("job_id").references(() => jobs.id, {
+      onDelete: "set null",
+    }),
+    iteration: integer("iteration").notNull(),
+    sequence: integer("sequence").notNull(),
+    stepType: text("step_type", { enum: AGENT_STEP_TYPES }).notNull(),
+    toolName: text("tool_name"),
+    toolCallId: text("tool_call_id"),
+    argsSummary: text("args_summary"),
+    resultSummary: text("result_summary"),
+    inputTokens: integer("input_tokens"),
+    outputTokens: integer("output_tokens"),
+    durationMs: integer("duration_ms"),
+    createdAt: text("created_at").notNull(),
+  },
+  (table) => ({
+    runSequenceIndex: index("idx_agent_run_steps_run_sequence").on(
+      table.agentRunId,
+      table.sequence,
+    ),
+    jobIndex: index("idx_agent_run_steps_job_id").on(table.jobId),
+  }),
+);
+
+export const agentDailyUsage = sqliteTable(
+  "agent_daily_usage",
+  {
+    kind: text("kind", { enum: AGENT_RUN_KINDS }).notNull(),
+    localDate: text("local_date").notNull(),
+    timeZone: text("time_zone").notNull(),
+    runsStarted: integer("runs_started").notNull().default(0),
+    inputTokens: integer("input_tokens").notNull().default(0),
+    outputTokens: integer("output_tokens").notNull().default(0),
+    searchesUsed: integer("searches_used").notNull().default(0),
+    judgmentsUsed: integer("judgments_used").notNull().default(0),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (table) => ({
+    primaryKey: primaryKey({
+      name: "pk_agent_daily_usage",
+      columns: [table.kind, table.localDate, table.timeZone],
+    }),
+  }),
+);
 
 export const jobChatThreads = sqliteTable(
   "job_chat_threads",
@@ -401,6 +522,12 @@ export type InterviewRow = typeof interviews.$inferSelect;
 export type NewInterviewRow = typeof interviews.$inferInsert;
 export type PipelineRunRow = typeof pipelineRuns.$inferSelect;
 export type NewPipelineRunRow = typeof pipelineRuns.$inferInsert;
+export type AgentRunRow = typeof agentRuns.$inferSelect;
+export type NewAgentRunRow = typeof agentRuns.$inferInsert;
+export type AgentRunStepRow = typeof agentRunSteps.$inferSelect;
+export type NewAgentRunStepRow = typeof agentRunSteps.$inferInsert;
+export type AgentDailyUsageRow = typeof agentDailyUsage.$inferSelect;
+export type NewAgentDailyUsageRow = typeof agentDailyUsage.$inferInsert;
 export type JobChatThreadRow = typeof jobChatThreads.$inferSelect;
 export type NewJobChatThreadRow = typeof jobChatThreads.$inferInsert;
 export type JobChatMessageRow = typeof jobChatMessages.$inferSelect;

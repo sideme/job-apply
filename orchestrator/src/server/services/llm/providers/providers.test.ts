@@ -184,7 +184,7 @@ describe("provider adapters", () => {
       mode: "text",
       baseUrl: deepSeekStrategy.defaultBaseUrl,
       apiKey: "deepseek-key",
-      model: "deepseek-chat",
+      model: "deepseek-v4-flash",
       messages,
       jsonSchema: schema,
     });
@@ -203,6 +203,95 @@ describe("provider adapters", () => {
     expect(qwenRequest.url).toBe(
       "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions",
     );
+  });
+
+  it("round-trips complete DeepSeek tool messages in non-thinking mode", () => {
+    const request = deepSeekStrategy.buildAgentRequest?.({
+      baseUrl: deepSeekStrategy.defaultBaseUrl,
+      apiKey: "deepseek-key",
+      model: "deepseek-v4-flash",
+      messages: [
+        { role: "user", content: "Use the tool" },
+        {
+          role: "assistant",
+          content: null,
+          toolCalls: [
+            {
+              id: "call-1",
+              type: "function",
+              function: { name: "echo_probe", arguments: '{"value":"ok"}' },
+            },
+          ],
+        },
+        { role: "tool", toolCallId: "call-1", content: '{"value":"ok"}' },
+      ],
+      tools: [
+        {
+          name: "echo_probe",
+          description: "Echo a probe value",
+          parameters: {
+            type: "object",
+            properties: { value: { type: "string" } },
+            required: ["value"],
+            additionalProperties: false,
+          },
+        },
+      ],
+      maxOutputTokens: 321,
+    });
+    expect(request).toBeDefined();
+    const body = request?.body as Record<string, unknown>;
+    expect(body.thinking).toEqual({ type: "disabled" });
+    expect(body.tool_choice).toBe("auto");
+    expect(body.max_tokens).toBe(321);
+    expect(body.messages).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          role: "assistant",
+          content: null,
+          tool_calls: expect.any(Array),
+        }),
+        expect.objectContaining({
+          role: "tool",
+          tool_call_id: "call-1",
+        }),
+      ]),
+    );
+
+    expect(
+      deepSeekStrategy.extractAgentTurn?.({
+        choices: [
+          {
+            finish_reason: "tool_calls",
+            message: {
+              content: null,
+              tool_calls: [
+                {
+                  id: "call-2",
+                  type: "function",
+                  function: { name: "echo_probe", arguments: "{}" },
+                },
+              ],
+            },
+          },
+        ],
+        usage: { prompt_tokens: 12, completion_tokens: 3 },
+      }),
+    ).toEqual({
+      message: {
+        role: "assistant",
+        content: null,
+        toolCalls: [
+          {
+            id: "call-2",
+            type: "function",
+            function: { name: "echo_probe", arguments: "{}" },
+          },
+        ],
+      },
+      finishReason: "tool_calls",
+      usage: { inputTokens: 12, outputTokens: 3 },
+    });
   });
 
   it("extracts text for openai and gemini variants", () => {

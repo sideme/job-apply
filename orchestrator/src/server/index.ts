@@ -7,6 +7,8 @@ import { logger } from "@infra/logger";
 import { sanitizeUnknown } from "@infra/sanitize";
 import { createApp } from "./app";
 import { initializeExtractorRegistry } from "./extractors/registry";
+import * as agentRunsRepo from "./repositories/agent-runs";
+import * as fitJudgmentsRepo from "./repositories/fit-judgments";
 import * as pipelineRepo from "./repositories/pipeline";
 import * as settingsRepo from "./repositories/settings";
 import {
@@ -29,6 +31,24 @@ async function startServer() {
   if (recoveredRuns > 0) {
     logger.warn("Recovered interrupted pipeline runs", {
       recoveredRuns,
+      staleAfterMinutes,
+    });
+  }
+  const recoveredAgentRuns = await agentRunsRepo.failStaleAgentRuns(
+    new Date(Date.now() - staleAfterMinutes * 60_000).toISOString(),
+  );
+  if (recoveredAgentRuns > 0) {
+    logger.warn("Recovered interrupted agent runs", {
+      recoveredAgentRuns,
+      staleAfterMinutes,
+    });
+  }
+  const recoveredFitJudgments = await fitJudgmentsRepo.recoverStaleFitJudgments(
+    new Date(Date.now() - staleAfterMinutes * 60_000).toISOString(),
+  );
+  if (recoveredFitJudgments > 0) {
+    logger.warn("Recovered interrupted Fit Judge jobs", {
+      recoveredFitJudgments,
       staleAfterMinutes,
     });
   }

@@ -61,6 +61,29 @@ describe("useOrchestratorFilters", () => {
     expect(result.current.jobLevelFilters).toEqual([]);
   });
 
+  it("parses, updates, and resets employment type query parameters", () => {
+    const { result } = renderHook(() => useOrchestratorFilters(), {
+      wrapper: createWrapper(
+        "/ready?employment=contract,full_time,not-a-real-type",
+      ),
+    });
+
+    expect(result.current.employmentTypeFilters).toEqual([
+      "full_time",
+      "contract",
+    ]);
+
+    act(() => {
+      result.current.setEmploymentTypeFilters(["permanent_full_time"]);
+    });
+    expect(result.current.employmentTypeFilters).toEqual([
+      "permanent_full_time",
+    ]);
+
+    act(() => result.current.resetFilters());
+    expect(result.current.employmentTypeFilters).toEqual([]);
+  });
+
   it("falls back to default sort for invalid sort query params", () => {
     const cases = [
       "/ready?sort=title",

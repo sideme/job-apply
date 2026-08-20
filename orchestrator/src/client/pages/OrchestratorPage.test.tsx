@@ -512,6 +512,78 @@ describe("OrchestratorPage", () => {
     });
   });
 
+  it("replaces a selected job whose posting date is outside the date filter", async () => {
+    window.matchMedia = createMatchMedia(
+      true,
+    ) as unknown as typeof window.matchMedia;
+    mockJobs = [
+      createJob({
+        ...job2,
+        id: "job-2",
+        status: "discovered",
+        datePosted: String(Date.parse("2026-08-18T00:00:00Z")),
+      }),
+    ];
+    mockSelectedJob = createJob({
+      ...jobFixture,
+      id: "job-1",
+      status: "discovered",
+      datePosted: String(Date.parse("2026-08-19T00:00:00Z")),
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/jobs/discovered/job-1?date=2026-08-18"]}>
+        <LocationWatcher />
+        <Routes>
+          <Route path="/jobs/:tab" element={<OrchestratorPage />} />
+          <Route path="/jobs/:tab/:jobId" element={<OrchestratorPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("location")).toHaveTextContent(
+        "/jobs/discovered/job-2?date=2026-08-18",
+      );
+    });
+  });
+
+  it("replaces a selected job outside the employment type filter", async () => {
+    window.matchMedia = createMatchMedia(
+      true,
+    ) as unknown as typeof window.matchMedia;
+    mockJobs = [
+      createJob({
+        ...job2,
+        id: "job-contract",
+        employmentTypeCategory: "contract",
+      }),
+    ];
+    mockSelectedJob = createJob({
+      ...jobFixture,
+      id: "job-full-time",
+      employmentTypeCategory: "full_time",
+    });
+
+    render(
+      <MemoryRouter
+        initialEntries={["/jobs/all/job-full-time?employment=contract"]}
+      >
+        <LocationWatcher />
+        <Routes>
+          <Route path="/jobs/:tab" element={<OrchestratorPage />} />
+          <Route path="/jobs/:tab/:jobId" element={<OrchestratorPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("location")).toHaveTextContent(
+        "/jobs/all/job-contract?employment=contract",
+      );
+    });
+  });
+
   it("opens the command bar when the filters search button is clicked", () => {
     window.matchMedia = createMatchMedia(
       true,

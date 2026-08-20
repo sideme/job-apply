@@ -9,6 +9,7 @@ import { KeyboardShortcutDialog } from "../components/KeyboardShortcutDialog";
 import { useDemoInfo } from "../hooks/useDemoInfo";
 import type { FilterTab } from "./orchestrator/constants";
 import { orderedFilterSources } from "./orchestrator/constants";
+import { isJobOnDateFilter } from "./orchestrator/date-filter";
 import { FloatingJobActionsBar } from "./orchestrator/FloatingJobActionsBar";
 import { JobCommandBar } from "./orchestrator/JobCommandBar";
 import { JobDetailPanel } from "./orchestrator/JobDetailPanel";
@@ -32,12 +33,16 @@ export const OrchestratorPage: React.FC = () => {
   const navigate = useNavigate();
   const {
     searchParams,
+    discoveredDate,
+    setDiscoveredDate,
     searchQuery,
     setSearchQuery,
     sourceFilter,
     setSourceFilter,
     jobLevelFilters,
     setJobLevelFilters,
+    employmentTypeFilters,
+    setEmploymentTypeFilters,
     salaryFilter,
     setSalaryFilter,
     sort,
@@ -67,6 +72,8 @@ export const OrchestratorPage: React.FC = () => {
   );
 
   const selectedJobId = jobId || null;
+  const activeDiscoveredDate =
+    activeTab === "discovered" ? discoveredDate : undefined;
 
   // Effect to sync URL if it was invalid
   useEffect(() => {
@@ -129,6 +136,8 @@ export const OrchestratorPage: React.FC = () => {
     activeTab,
     jobLevelFilters,
     sourceFilter,
+    employmentTypeFilters,
+    activeDiscoveredDate,
   );
   const enabledSources = useMemo(
     () => getEnabledSources(settings ?? null),
@@ -162,6 +171,22 @@ export const OrchestratorPage: React.FC = () => {
     sourceFilter,
     salaryFilter,
     sort,
+  );
+  const selectedJobHasWrongPostingDate = Boolean(
+    activeDiscoveredDate &&
+      selectedJobId &&
+      selectedJob?.id === selectedJobId &&
+      !isJobOnDateFilter(selectedJob, activeDiscoveredDate),
+  );
+  const selectedJobHasWrongServerFilter = Boolean(
+    selectedJobId &&
+      selectedJob?.id === selectedJobId &&
+      ((sourceFilter !== "all" && selectedJob.source !== sourceFilter) ||
+        (jobLevelFilters.length > 0 &&
+          (selectedJob.jobLevelCategory == null ||
+            !jobLevelFilters.includes(selectedJob.jobLevelCategory))) ||
+        (employmentTypeFilters.length > 0 &&
+          !employmentTypeFilters.includes(selectedJob.employmentTypeCategory))),
   );
   const counts = useMemo(
     () => ({
@@ -269,11 +294,13 @@ export const OrchestratorPage: React.FC = () => {
       for (const key of [
         "source",
         "level",
+        "employment",
         "sponsor",
         "salaryMode",
         "salaryMin",
         "salaryMax",
         "minSalary",
+        "date",
       ]) {
         nextParams.delete(key);
       }
@@ -287,19 +314,29 @@ export const OrchestratorPage: React.FC = () => {
   );
 
   useEffect(() => {
+    if (isLoading) return;
     if (activeJobs.length === 0) {
       if (selectedJobId) handleSelectJobId(null);
       return;
     }
-    if (!selectedJobId) {
-      // Auto-select first job ONLY on desktop when nothing is currently selected.
+    if (
+      !selectedJobId ||
+      selectedJobHasWrongPostingDate ||
+      selectedJobHasWrongServerFilter
+    ) {
+      // Keep the detail pane aligned with the current date-filtered list.
       if (isDesktop) {
         navigateWithContext(activeTab, activeJobs[0].id, true);
+      } else if (selectedJobId) {
+        handleSelectJobId(null);
       }
     }
   }, [
     activeJobs,
     selectedJobId,
+    selectedJobHasWrongPostingDate,
+    selectedJobHasWrongServerFilter,
+    isLoading,
     isDesktop,
     activeTab,
     navigateWithContext,
@@ -393,6 +430,10 @@ export const OrchestratorPage: React.FC = () => {
             onSourceFilterChange={setSourceFilter}
             jobLevelFilters={jobLevelFilters}
             onJobLevelFiltersChange={setJobLevelFilters}
+            employmentTypeFilters={employmentTypeFilters}
+            onEmploymentTypeFiltersChange={setEmploymentTypeFilters}
+            discoveredDate={discoveredDate}
+            onDiscoveredDateChange={setDiscoveredDate}
             salaryFilter={salaryFilter}
             onSalaryFilterChange={setSalaryFilter}
             sourcesWithJobs={sourcesWithJobs}

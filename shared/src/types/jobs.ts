@@ -1,4 +1,8 @@
 import type { ExtractorSourceId } from "../extractors";
+import type {
+  EmploymentTypeCategory,
+  HiringOrganizationCategory,
+} from "../job-engagement";
 import type { JobLevel } from "../job-level";
 
 export type JobStatus =
@@ -148,7 +152,7 @@ export interface Job {
   status: JobStatus;
   outcome: JobOutcome | null;
   closedAt: number | null;
-  suitabilityScore: number | null; // 0-95 conservative job-fit estimate
+  suitabilityScore: number | null; // Primary ATS score; DeepSeek when Fit Judge completes
   suitabilityReason: string | null; // AI explanation
   suitabilityReasonSource: "local" | "llm" | null;
   semanticScore: number | null;
@@ -157,6 +161,23 @@ export interface Job {
   jobEmbedding: string | null; // cached normalized vector JSON
   jobEmbeddingModel: string | null;
   jobEmbeddingHash: string | null; // hash of the exact text sent for embedding
+  llmFitScore: number | null;
+  llmFitVerdict: "strong" | "possible" | "weak" | null;
+  llmFitPoints: string | null; // bounded JSON string array
+  llmFitGaps: string | null; // bounded JSON string array
+  llmFitStatus:
+    | "pending"
+    | "running"
+    | "completed"
+    | "failed"
+    | "skipped_stale"
+    | null;
+  llmFitError: string | null;
+  llmFitProvider: string | null;
+  llmFitModel: string | null;
+  llmFitPromptVersion: string | null;
+  llmFitInputHash: string | null;
+  llmFitAt: string | null;
   tailoredSummary: string | null; // Generated resume summary
   tailoredHeadline: string | null; // Generated resume headline
   tailoredSkills: string | null; // Generated resume skills (JSON)
@@ -190,6 +211,12 @@ export interface Job {
   vacancyCount: number | null;
   workFromHomeType: string | null;
 
+  // Derived from source metadata, title, employer, and explicit JD language.
+  employmentTypeCategory: EmploymentTypeCategory;
+  employmentTypeReason: string | null;
+  hiringOrganizationCategory: HiringOrganizationCategory;
+  hiringOrganizationReason: string | null;
+
   // Timestamps
   discoveredAt: string;
   processedAt: string | null;
@@ -215,6 +242,10 @@ export type JobListItem = Pick<
   | "closedAt"
   | "suitabilityScore"
   | "jobType"
+  | "employmentTypeCategory"
+  | "employmentTypeReason"
+  | "hiringOrganizationCategory"
+  | "hiringOrganizationReason"
   | "jobFunction"
   | "salaryMinAmount"
   | "salaryMaxAmount"
@@ -328,6 +359,17 @@ export interface UpdateJobInput {
   jobEmbedding?: string | null;
   jobEmbeddingModel?: string | null;
   jobEmbeddingHash?: string | null;
+  llmFitScore?: number | null;
+  llmFitVerdict?: "strong" | "possible" | "weak" | null;
+  llmFitPoints?: string | null;
+  llmFitGaps?: string | null;
+  llmFitStatus?: Job["llmFitStatus"];
+  llmFitError?: string | null;
+  llmFitProvider?: string | null;
+  llmFitModel?: string | null;
+  llmFitPromptVersion?: string | null;
+  llmFitInputHash?: string | null;
+  llmFitAt?: string | null;
   tailoredSummary?: string;
   tailoredHeadline?: string;
   tailoredSkills?: string;

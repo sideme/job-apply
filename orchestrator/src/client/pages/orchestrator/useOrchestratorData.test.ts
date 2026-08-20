@@ -137,6 +137,72 @@ describe("useOrchestratorData", () => {
     expect((result.current.jobs[0] as any)?.id).toBe("newest");
   });
 
+  it("automatically loads every page for a selected discovery date", async () => {
+    vi.mocked(api.getJobs).mockImplementation(async (options) => {
+      if ((options?.offset ?? 0) === 0) {
+        return {
+          ...makeResponse("page-1", "rev-complete"),
+          total: 2,
+          limit: 60,
+          offset: 0,
+          hasMore: true,
+          availableSources: ["indeed", "linkedin"],
+        } as any;
+      }
+      return {
+        ...makeResponse("page-2", "rev-complete"),
+        total: 2,
+        limit: 60,
+        offset: 1,
+        hasMore: false,
+        availableSources: ["indeed", "linkedin"],
+      } as any;
+    });
+
+    const { result } = renderHook(() =>
+      useOrchestratorData(null, "", "discovered", [], "all", [], "2026-08-19"),
+    );
+
+    await waitFor(() => {
+      expect(result.current.jobs.map((job) => job.id)).toEqual([
+        "page-1",
+        "page-2",
+      ]);
+    });
+    expect(api.getJobs).toHaveBeenCalledWith({
+      view: "list",
+      statuses: ["discovered", "processing"],
+      discoveredDate: "2026-08-19",
+      limit: 60,
+      offset: 0,
+    });
+    expect(api.getJobs).toHaveBeenCalledWith({
+      view: "list",
+      statuses: ["discovered", "processing"],
+      discoveredDate: "2026-08-19",
+      limit: 60,
+      offset: 1,
+    });
+    expect(result.current.hasMoreJobs).toBe(false);
+  });
+
+  it("passes employment type selections to list and revision requests", async () => {
+    renderHook(() =>
+      useOrchestratorData(null, "", "all", [], "all", [
+        "full_time",
+        "contract",
+      ]),
+    );
+
+    await waitFor(() => {
+      expect(api.getJobs).toHaveBeenCalledWith(
+        expect.objectContaining({
+          employmentTypes: ["full_time", "contract"],
+        }),
+      );
+    });
+  });
+
   it("checks revision every 30s and skips full reload when unchanged", async () => {
     vi.useFakeTimers();
     vi.mocked(api.getJobs).mockResolvedValue(

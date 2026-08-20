@@ -4,6 +4,8 @@ Personal, self-hosted job search pipeline for the Canadian market: discovers pos
 
 The Jobs screen loads 60 postings at a time and exposes **Load more jobs** when additional matches exist. Search runs against a local SQLite FTS5 index over title, company, location, and the full job description, so a keyword like `spring`, `kafka`, or `kubernetes` finds every posting that requires it—not only the rare listings that name it in the title—and it does not call an LLM or consume tokens. Multiple search words must all match; partial word prefixes such as `develop` match `developer`.
 
+The **Discovered** tab defaults to jobs collected today in the `America/Toronto` timezone. Use its date picker to review an earlier collection day; pagination, counts, search, source, and job-level filters all stay within that date. See [Discovered date filtering](docs/features/discovered-date-filter.md).
+
 Forked from [job-ops](https://github.com/DaKheera47/job-ops) and trimmed down to only what's needed here (dropped the UK-specific extractors, the public docs site, and unused sources). No shared git history with upstream by design.
 
 See [docs/superpowers/specs](docs/superpowers/specs) and [docs/superpowers/plans](docs/superpowers/plans) for historical design and implementation records. The current README is authoritative for setup and supported features.
@@ -20,7 +22,14 @@ When a source supplies a full posting timestamp, the Jobs list and job detail he
 
 Jobs are deduplicated automatically when their canonical URL matches, or when their normalized title, employer, location, and posting date identify the same role. Same-source results require a matching source ID or a near-identical job description, preserving legitimate parallel openings that share a generic title. The richer copy stays visible, and historical duplicate records are retained internally so existing application history is not deleted. New duplicates in the same import are skipped.
 
+Job rows also show conservative employment and hiring-organization markers derived from source metadata and explicit title/JD language. Use **Filters → Employment type** to select one or more of `Permanent · Full-time`, `Full-time`, `Contract`, `Temporary`, `Part-time`, and `Internship / Co-op`; the database applies the filter before counts and pagination. Job details show source-provided company profiles or a clearly labelled company section extracted from the JD. Unknown values stay hidden, generic technical phrases such as “API contract” do not count, and these markers do not change ATS scores. See [Employment filtering, hiring-organization markers, and company context](docs/features/employment-type-classification.md).
+
 Automatic runs discover and score jobs only. Tailoring is off by default and is performed only after an explicit per-job action, preventing scheduled discovery from consuming chat-model tokens.
+
+Optional bounded Search Planner and Fit Judge features are documented in
+[`docs/features/agentic-discovery.md`](docs/features/agentic-discovery.md). They are
+disabled by default; deterministic discovery and local ATS scoring require no LLM API
+key.
 
 ## Optional recurring discovery
 

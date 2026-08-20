@@ -40,11 +40,18 @@ import { scoreJobSuitability } from "@server/services/scorer";
 import { calculateLocalJobScore } from "@server/services/scoring/local-score-job";
 import { notifyWhatsAppEvent } from "@server/services/whatsapp";
 import { asyncPool } from "@server/utils/async-pool";
+import {
+  getUtcEpochRangeForDate,
+  getUtcRangeForLocalDate,
+  isValidLocalDate,
+} from "@server/utils/local-date";
 import { EXTRACTOR_SOURCE_IDS } from "@shared/extractors";
 import {
   APPLICATION_OUTCOMES,
   APPLICATION_STAGES,
   applicationQuestionSchema,
+  EMPLOYMENT_TYPE_CATEGORIES,
+  type EmploymentTypeCategory,
   JOB_LEVELS,
   type Job,
   type JobAction,
@@ -288,12 +295,45 @@ const jobSourceQuerySchema = z
     return values as JobSource[];
   });
 
+const employmentTypeQuerySchema = z
+  .string()
+  .trim()
+  .max(200)
+  .transform((value, ctx): EmploymentTypeCategory[] => {
+    const values = Array.from(
+      new Set(
+        value
+          .split(",")
+          .map((employmentType) => employmentType.trim())
+          .filter(Boolean),
+      ),
+    );
+    const invalid = values.filter(
+      (employmentType) =>
+        !EMPLOYMENT_TYPE_CATEGORIES.includes(
+          employmentType as EmploymentTypeCategory,
+        ),
+    );
+    if (values.length === 0 || invalid.length > 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: invalid.length
+          ? `Unsupported employment types: ${invalid.join(", ")}`
+          : "At least one employment type is required",
+      });
+      return z.NEVER;
+    }
+    return values as EmploymentTypeCategory[];
+  });
+
 const listJobsQuerySchema = z.object({
   status: z.string().optional(),
   view: z.enum(["full", "list"]).optional(),
   q: z.string().trim().max(200).optional(),
   level: jobLevelQuerySchema.optional(),
   source: jobSourceQuerySchema.optional(),
+  employment: employmentTypeQuerySchema.optional(),
+  discoveredDate: z.string().refine(isValidLocalDate).optional(),
   limit: z.coerce.number().int().min(1).max(100).default(60),
   offset: z.coerce.number().int().min(0).default(0),
 });
@@ -303,6 +343,8 @@ const jobsRevisionQuerySchema = z.object({
   q: z.string().trim().max(200).optional(),
   level: jobLevelQuerySchema.optional(),
   source: jobSourceQuerySchema.optional(),
+  employment: employmentTypeQuerySchema.optional(),
+  discoveredDate: z.string().refine(isValidLocalDate).optional(),
 });
 
 const SKIPPABLE_STATUSES: ReadonlySet<JobStatus> = new Set([
@@ -315,6 +357,16 @@ function parseStatusFilter(statusFilter?: string): JobStatus[] | undefined {
     | JobStatus[]
     | undefined;
   return parsed && parsed.length > 0 ? parsed : undefined;
+}
+
+function resolveJobDateFilter(
+  selectedDate?: string,
+): jobsRepo.JobDateFilter | undefined {
+  if (!selectedDate) return undefined;
+  return {
+    posting: getUtcEpochRangeForDate(selectedDate),
+    discovery: getUtcRangeForLocalDate(selectedDate),
+  };
 }
 
 function resolveRequestOrigin(req: Request): string | null {
@@ -516,10 +568,16 @@ async function executeJobActionForJob(
 
     const local = await calculateLocalJobScore(job, profile);
 
+    const hasCompletedModelScore =
+      job.llmFitStatus === "completed" && job.llmFitScore !== null;
     const updated = await jobsRepo.updateJob(job.id, {
-      suitabilityScore: local.total,
-      suitabilityReason: local.reason,
-      suitabilityReasonSource: local.reasonSource,
+      ...(hasCompletedModelScore
+        ? {}
+        : {
+            suitabilityScore: local.total,
+            suitabilityReason: local.reason,
+            suitabilityReasonSource: local.reasonSource,
+          }),
       semanticScore: local.semanticScore,
       keywordCoverage: local.keywordCoverage,
       keywordMissing: JSON.stringify(local.keywordMissing),
@@ -596,6 +654,9 @@ jobsRouter.get("/", async (req: Request, res: Response) => {
     const search = parsedQuery.data.q || undefined;
     const jobLevels = parsedQuery.data.level;
     const sources = parsedQuery.data.source;
+    const employmentTypes = parsedQuery.data.employment;
+    const discoveredDate = parsedQuery.data.discoveredDate;
+    const dateFilter = resolveJobDateFilter(discoveredDate);
     const statuses = parseStatusFilter(statusFilter);
     const view = parsedQuery.data.view ?? "list";
     const { limit, offset } = parsedQuery.data;
@@ -609,6 +670,8 @@ jobsRouter.get("/", async (req: Request, res: Response) => {
             offset,
             jobLevels,
             sources,
+            employmentTypes,
+            dateFilter,
           )
         : jobsRepo.getAllJobs(
             statuses,
@@ -617,9 +680,24 @@ jobsRouter.get("/", async (req: Request, res: Response) => {
             offset,
             jobLevels,
             sources,
+            employmentTypes,
+            dateFilter,
           ),
-      jobsRepo.getJobStats(search, jobLevels, sources),
-      jobsRepo.getJobsRevision(statuses, search, jobLevels, sources),
+      jobsRepo.getJobStats(
+        search,
+        jobLevels,
+        sources,
+        employmentTypes,
+        dateFilter,
+      ),
+      jobsRepo.getJobsRevision(
+        statuses,
+        search,
+        jobLevels,
+        sources,
+        employmentTypes,
+        dateFilter,
+      ),
       // Filter-independent so the source chips stay stable across tabs/searches.
       jobsRepo.getDistinctJobSources(),
     ]);
@@ -645,6 +723,8 @@ jobsRouter.get("/", async (req: Request, res: Response) => {
       search: search ?? null,
       jobLevels: jobLevels ?? null,
       sources: sources ?? null,
+      employmentTypes: employmentTypes ?? null,
+      postingDate: discoveredDate ?? null,
       revision: revision.revision,
       returnedCount: jobs.length,
       total,
@@ -687,11 +767,16 @@ jobsRouter.get("/revision", async (req: Request, res: Response) => {
     const search = parsedQuery.data.q || undefined;
     const jobLevels = parsedQuery.data.level;
     const sources = parsedQuery.data.source;
+    const employmentTypes = parsedQuery.data.employment;
+    const discoveredDate = parsedQuery.data.discoveredDate;
+    const dateFilter = resolveJobDateFilter(discoveredDate);
     const revision = await jobsRepo.getJobsRevision(
       statuses,
       search,
       jobLevels,
       sources,
+      employmentTypes,
+      dateFilter,
     );
 
     const response: JobsRevisionResponse = {
@@ -705,6 +790,8 @@ jobsRouter.get("/revision", async (req: Request, res: Response) => {
       route: "GET /api/jobs/revision",
       statusFilter: revision.statusFilter,
       jobLevels: jobLevels ?? null,
+      employmentTypes: employmentTypes ?? null,
+      postingDate: discoveredDate ?? null,
       revision: revision.revision,
       total: revision.total,
     });

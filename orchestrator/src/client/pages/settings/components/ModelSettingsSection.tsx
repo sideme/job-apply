@@ -96,7 +96,7 @@ export const ModelSettingsSection: React.FC<ModelSettingsSectionProps> = ({
   const projectSelectionModel = projectSelection || effectiveDefaultModel;
   const modelPlaceholder =
     selectedProvider === "deepseek"
-      ? "deepseek-chat"
+      ? "deepseek-v4-flash"
       : selectedProvider === "qwen"
         ? "qwen-plus"
         : defaultModel || "google/gemini-3-flash-preview";

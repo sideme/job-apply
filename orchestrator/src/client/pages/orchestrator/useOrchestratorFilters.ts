@@ -1,8 +1,15 @@
-import { JOB_LEVELS, type JobLevel, type JobSource } from "@shared/types.js";
+import {
+  EMPLOYMENT_TYPE_CATEGORIES,
+  type EmploymentTypeCategory,
+  JOB_LEVELS,
+  type JobLevel,
+  type JobSource,
+} from "@shared/types.js";
 import { useCallback, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 import type { JobSort, SalaryFilter, SalaryFilterMode } from "./constants";
 import { DEFAULT_SORT } from "./constants";
+import { getTodayDateFilter, isValidDateFilter } from "./date-filter";
 
 const allowedSalaryModes: SalaryFilterMode[] = [
   "at_least",
@@ -20,6 +27,26 @@ const allowedSortDirections: JobSort["direction"][] = ["asc", "desc"];
 
 export const useOrchestratorFilters = () => {
   const [searchParams, setSearchParams] = useSearchParams();
+
+  const todayDateFilter = getTodayDateFilter();
+  const requestedDateFilter = searchParams.get("date");
+  const discoveredDate = isValidDateFilter(requestedDateFilter)
+    ? requestedDateFilter
+    : todayDateFilter;
+  const setDiscoveredDate = useCallback(
+    (value: string) => {
+      if (!isValidDateFilter(value)) return;
+      setSearchParams(
+        (prev) => {
+          if (value === todayDateFilter) prev.delete("date");
+          else prev.set("date", value);
+          return prev;
+        },
+        { replace: true },
+      );
+    },
+    [setSearchParams, todayDateFilter],
+  );
 
   const searchQuery = searchParams.get("q") ?? "";
   const setSearchQuery = useCallback(
@@ -71,6 +98,38 @@ export const useOrchestratorFilters = () => {
           );
           if (normalized.length === 0) prev.delete("level");
           else prev.set("level", normalized.join(","));
+          return prev;
+        },
+        { replace: true },
+      );
+    },
+    [setSearchParams],
+  );
+
+  const employmentTypeFilters = useMemo((): EmploymentTypeCategory[] => {
+    const requested = new Set(
+      (searchParams.get("employment") ?? "")
+        .split(",")
+        .map((employmentType) => employmentType.trim())
+        .filter((employmentType) =>
+          EMPLOYMENT_TYPE_CATEGORIES.includes(
+            employmentType as EmploymentTypeCategory,
+          ),
+        ),
+    );
+    return EMPLOYMENT_TYPE_CATEGORIES.filter((employmentType) =>
+      requested.has(employmentType),
+    );
+  }, [searchParams]);
+  const setEmploymentTypeFilters = useCallback(
+    (employmentTypes: EmploymentTypeCategory[]) => {
+      setSearchParams(
+        (prev) => {
+          const normalized = EMPLOYMENT_TYPE_CATEGORIES.filter(
+            (employmentType) => employmentTypes.includes(employmentType),
+          );
+          if (normalized.length === 0) prev.delete("employment");
+          else prev.set("employment", normalized.join(","));
           return prev;
         },
         { replace: true },
@@ -162,12 +221,14 @@ export const useOrchestratorFilters = () => {
       (prev) => {
         prev.delete("source");
         prev.delete("level");
+        prev.delete("employment");
         prev.delete("q");
         prev.delete("salaryMode");
         prev.delete("salaryMin");
         prev.delete("salaryMax");
         prev.delete("minSalary");
         prev.delete("sort");
+        prev.delete("date");
         return prev;
       },
       { replace: true },
@@ -176,12 +237,16 @@ export const useOrchestratorFilters = () => {
 
   return {
     searchParams,
+    discoveredDate,
+    setDiscoveredDate,
     searchQuery,
     setSearchQuery,
     sourceFilter,
     setSourceFilter,
     jobLevelFilters,
     setJobLevelFilters,
+    employmentTypeFilters,
+    setEmploymentTypeFilters,
     salaryFilter,
     setSalaryFilter,
     sort,

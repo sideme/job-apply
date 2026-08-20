@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import {
   cn,
   formatDate,
+  formatDiscoveryDate,
   formatPostingDateTime,
   sourceLabel,
 } from "@/lib/utils";
@@ -28,13 +29,19 @@ interface JobHeaderProps {
   className?: string;
 }
 
-const ScoreMeter: React.FC<{ score: number | null }> = ({ score }) => {
+const ScoreMeter: React.FC<{
+  score: number | null;
+  source: Job["suitabilityReasonSource"];
+}> = ({ score, source }) => {
   if (score == null) {
     return <span className="text-[10px] text-muted-foreground/60">-</span>;
   }
 
   return (
     <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground/70">
+      <span className="uppercase tracking-wide">
+        {source === "llm" ? "DeepSeek ATS" : "Local ATS"}
+      </span>
       <div className="h-1 w-12 rounded-full bg-muted/30">
         <div
           className="h-1 rounded-full bg-primary/50"
@@ -53,6 +60,9 @@ export const JobHeader: React.FC<JobHeaderProps> = ({ job, className }) => {
   const { pathname } = useLocation();
   const isJobPage = pathname.startsWith("/job/");
   const datePosted = formatPostingDateTime(job.datePosted);
+  const discoveryDate = datePosted
+    ? null
+    : formatDiscoveryDate(job.discoveredAt);
   const deadline = formatDate(job.deadline);
   const prepareAutofill = async () => {
     try {
@@ -174,6 +184,15 @@ export const JobHeader: React.FC<JobHeaderProps> = ({ job, className }) => {
             )}
           </span>
         )}
+        {discoveryDate && (
+          <span
+            className="flex items-center gap-1 text-amber-500/80"
+            title="The source did not provide a posting date"
+          >
+            <CalendarClock className="h-3 w-3" />
+            Found {discoveryDate} (posting date unavailable)
+          </span>
+        )}
         {(!datePosted || !datePosted.hasTime) && (
           <button
             type="button"
@@ -213,7 +232,10 @@ export const JobHeader: React.FC<JobHeaderProps> = ({ job, className }) => {
             label={jobStatus.label}
           />
         </div>
-        <ScoreMeter score={job.suitabilityScore} />
+        <ScoreMeter
+          score={job.suitabilityScore}
+          source={job.suitabilityReasonSource}
+        />
       </div>
     </div>
   );

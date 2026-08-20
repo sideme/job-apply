@@ -39,6 +39,103 @@ describe.sequential("Jobs API routes", () => {
     expect(typeof filteredBody.data.revision).toBe("string");
   });
 
+  it("includes same-day undated discoveries without mixing known older posts", async () => {
+    const { getSqliteClient } = await import("@server/db/index");
+    const { createJob } = await import("@server/repositories/jobs");
+    const before = await createJob({
+      source: "manual",
+      title: "Before posting day",
+      employer: "Acme",
+      jobUrl: "https://example.com/job/date-before",
+      datePosted: "2026-08-18T23:59:59.999Z",
+    });
+    const first = await createJob({
+      source: "manual",
+      title: "At posting day midnight",
+      employer: "Acme",
+      jobUrl: "https://example.com/job/date-first",
+      datePosted: "2026-08-19T00:00:00.000Z",
+    });
+    const last = await createJob({
+      source: "manual",
+      title: "Before next posting day",
+      employer: "Acme",
+      jobUrl: "https://example.com/job/date-last",
+      datePosted: "2026-08-19T23:59:59.999Z",
+    });
+    const after = await createJob({
+      source: "manual",
+      title: "At next posting day",
+      employer: "Acme",
+      jobUrl: "https://example.com/job/date-after",
+      datePosted: "2026-08-20T00:00:00.000Z",
+    });
+    const undatedSelectedDay = await createJob({
+      source: "manual",
+      title: "Missing posting date found on selected day",
+      employer: "Acme",
+      jobUrl: "https://example.com/job/date-missing-selected",
+    });
+    const undatedOtherDay = await createJob({
+      source: "manual",
+      title: "Missing posting date found on another day",
+      employer: "Acme",
+      jobUrl: "https://example.com/job/date-missing-other",
+    });
+    const updateDiscoveredAt = getSqliteClient().prepare(
+      "UPDATE jobs SET discovered_at = ?, updated_at = ? WHERE id = ?",
+    );
+    updateDiscoveredAt.run(
+      "2026-08-19T12:00:00.000Z",
+      "2026-08-19T12:00:00.000Z",
+      undatedSelectedDay.id,
+    );
+    updateDiscoveredAt.run(
+      "2026-08-18T12:00:00.000Z",
+      "2026-08-18T12:00:00.000Z",
+      undatedOtherDay.id,
+    );
+
+    const response = await fetch(
+      `${baseUrl}/api/jobs?status=discovered&discoveredDate=2026-08-19`,
+    );
+    const body = await response.json();
+    expect(response.status).toBe(200);
+    expect(body.ok).toBe(true);
+    expect(body.data.total).toBe(3);
+    expect(body.data.byStatus.discovered).toBe(3);
+    expect(body.data.jobs.map((job: { id: string }) => job.id)).toEqual(
+      expect.arrayContaining([first.id, last.id, undatedSelectedDay.id]),
+    );
+    expect(body.data.jobs.map((job: { id: string }) => job.id)).not.toContain(
+      before.id,
+    );
+    expect(body.data.jobs.map((job: { id: string }) => job.id)).not.toContain(
+      after.id,
+    );
+    expect(body.data.jobs.map((job: { id: string }) => job.id)).not.toContain(
+      undatedOtherDay.id,
+    );
+
+    const revisionResponse = await fetch(
+      `${baseUrl}/api/jobs/revision?status=discovered&discoveredDate=2026-08-19`,
+    );
+    const revisionBody = await revisionResponse.json();
+    expect(revisionResponse.status).toBe(200);
+    expect(revisionBody.data.total).toBe(3);
+
+    const invalidResponse = await fetch(
+      `${baseUrl}/api/jobs?discoveredDate=2026-02-30`,
+    );
+    const invalidBody = await invalidResponse.json();
+    expect(invalidResponse.status).toBe(400);
+    expect(invalidBody).toMatchObject({
+      ok: false,
+      error: { code: "INVALID_REQUEST" },
+      meta: { requestId: expect.any(String) },
+    });
+  });
+
   it("filters the same posting discovered through different sources", async () => {
     const { createJobs } = await import("@server/repositories/jobs");
     const result = await createJobs([
@@ -236,13 +333,68 @@ describe.sequential("Jobs API routes", () => {
     expect(body.error.code).toBe("INVALID_REQUEST");
   });
 
+  it("filters multiple employment types before pagination", async () => {
+    const { createJob } = await import("@server/repositories/jobs");
+    await createJob({
+      source: "manual",
+      title: "Permanent Developer",
+      employer: "Northwind",
+      jobUrl: "https://example.com/job/employment-permanent",
+      jobType: "permanent full-time",
+    });
+    await createJob({
+      source: "manual",
+      title: "Contract Developer",
+      employer: "Contoso",
+      jobUrl: "https://example.com/job/employment-contract",
+      jobType: "12 month contract",
+    });
+    await createJob({
+      source: "manual",
+      title: "Part-time Developer",
+      employer: "Fabrikam",
+      jobUrl: "https://example.com/job/employment-part-time",
+      jobType: "part-time",
+    });
+
+    const response = await fetch(
+      `${baseUrl}/api/jobs?view=list&employment=permanent_full_time,contract&limit=1`,
+    );
+    const body = await response.json();
+    expect(response.status).toBe(200);
+    expect(body.data.total).toBe(2);
+    expect(body.data.jobs).toHaveLength(1);
+    expect(body.data.hasMore).toBe(true);
+    expect(["permanent_full_time", "contract"]).toContain(
+      body.data.jobs[0].employmentTypeCategory,
+    );
+
+    const revisionResponse = await fetch(
+      `${baseUrl}/api/jobs/revision?employment=permanent_full_time,contract`,
+    );
+    const revisionBody = await revisionResponse.json();
+    expect(revisionResponse.status).toBe(200);
+    expect(revisionBody.data.total).toBe(2);
+  });
+
+  it("rejects invalid employment type filters", async () => {
+    const response = await fetch(
+      `${baseUrl}/api/jobs?employment=full_time,freelance-ish`,
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(body.error.code).toBe("INVALID_REQUEST");
+  });
+
   it("supports lightweight and full jobs list views", async () => {
     const { createJob } = await import("@server/repositories/jobs");
     await createJob({
       source: "manual",
       title: "List View Role",
-      employer: "Acme",
+      employer: "Acme Consulting",
       jobUrl: "https://example.com/job/list-view",
+      jobType: "contract",
       jobDescription: "Heavy description that should not be in list mode",
     });
 
@@ -253,6 +405,10 @@ describe.sequential("Jobs API routes", () => {
     expect(typeof listBody.meta.requestId).toBe("string");
     expect(listBody.data.jobs[0].id).toBeTruthy();
     expect(listBody.data.jobs[0].title).toBe("List View Role");
+    expect(listBody.data.jobs[0]).toMatchObject({
+      employmentTypeCategory: "contract",
+      hiringOrganizationCategory: "consulting_firm",
+    });
     expect(listBody.data.jobs[0]).not.toHaveProperty("jobDescription");
     expect(typeof listBody.data.revision).toBe("string");
 

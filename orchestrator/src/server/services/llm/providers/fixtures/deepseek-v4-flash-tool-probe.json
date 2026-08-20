@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "capturedAt": "2026-08-13",
+  "provider": "deepseek",
+  "model": "deepseek-v4-flash",
+  "mode": "non-thinking",
+  "request": {
+    "toolChoice": "auto",
+    "thinking": "disabled",
+    "toolName": "echo_probe"
+  },
+  "observed": {
+    "firstStatus": 200,
+    "finishReason": "tool_calls",
+    "toolCallIdPresent": true,
+    "argumentsValid": true,
+    "assistantContentWasNull": false,
+    "roundTripStatus": 200,
+    "roundTripSucceeded": true,
+    "finalContentPresent": true
+  },
+  "usage": {
+    "inputTokens": 657,
+    "outputTokens": 64
+  },
+  "sanitization": {
+    "containsApiKey": false,
+    "containsRawResponse": false,
+    "containsPromptContent": false
+  }
+}

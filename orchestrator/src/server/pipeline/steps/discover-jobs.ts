@@ -37,6 +37,28 @@ type DiscoverySourceTask = {
   run: () => Promise<DiscoveryTaskResult>;
 };
 
+export function resolveRunnableDiscoverySources(input: {
+  requestedSources: PipelineConfig["sources"];
+  selectedCountry: string;
+  linkedinCooldownUntil?: string;
+}): {
+  compatibleSources: PipelineConfig["sources"];
+  runnableSources: PipelineConfig["sources"];
+  linkedinInCooldown: boolean;
+} {
+  const compatibleSources = input.requestedSources.filter((source) =>
+    isSourceAllowedForCountry(source, input.selectedCountry),
+  );
+  const linkedinInCooldown = isLinkedInInCooldown(input.linkedinCooldownUntil);
+  return {
+    compatibleSources,
+    runnableSources: linkedinInCooldown
+      ? compatibleSources.filter((source) => source !== "linkedin")
+      : compatibleSources,
+    linkedinInCooldown,
+  };
+}
+
 function parseBlockedCompanyKeywords(raw: string | undefined): string[] {
   if (!raw) return [];
   try {
@@ -85,9 +107,11 @@ function filterJobsByRequestedCities(args: {
 export async function discoverJobsStep(args: {
   mergedConfig: PipelineConfig;
   shouldCancel?: () => boolean;
+  searchTermsOverride?: string[];
 }): Promise<{
   discoveredJobs: CreateJobInput[];
   sourceErrors: string[];
+  sourcesUsed: PipelineConfig["sources"];
 }> {
   logger.info("Running discovery step");
 
@@ -100,7 +124,9 @@ export async function discoverJobsStep(args: {
   const searchTermsSetting = settings.searchTerms;
   let searchTerms: string[] = [];
 
-  if (searchTermsSetting) {
+  if (args.searchTermsOverride) {
+    searchTerms = normalizeStringArray(args.searchTermsOverride);
+  } else if (searchTermsSetting) {
     searchTerms = JSON.parse(searchTermsSetting) as string[];
   } else {
     const defaultSearchTermsEnv =
@@ -117,16 +143,12 @@ export async function discoverJobsStep(args: {
       settings.jobspyLocation ??
       "united kingdom",
   );
-  const compatibleSources = args.mergedConfig.sources.filter((source) =>
-    isSourceAllowedForCountry(source, selectedCountry),
-  );
-
-  const linkedinInCooldown = isLinkedInInCooldown(
-    settings.linkedinCooldownUntil,
-  );
-  const runnableSources = linkedinInCooldown
-    ? compatibleSources.filter((source) => source !== "linkedin")
-    : compatibleSources;
+  const { compatibleSources, runnableSources, linkedinInCooldown } =
+    resolveRunnableDiscoverySources({
+      requestedSources: args.mergedConfig.sources,
+      selectedCountry,
+      linkedinCooldownUntil: settings.linkedinCooldownUntil,
+    });
 
   if (linkedinInCooldown && compatibleSources.includes("linkedin")) {
     logger.info("Skipping linkedin: circuit breaker cooldown active", {
@@ -188,10 +210,12 @@ export async function discoverJobsStep(args: {
   }
 
   const sourceTasks: DiscoverySourceTask[] = [];
+  const sourcesUsed: PipelineConfig["sources"] = [];
 
   for (const [manifestId, grouped] of groupedByManifest) {
     const manifest = registry.manifests.get(manifestId);
     if (!manifest) continue;
+    sourcesUsed.push(...(grouped.sources as PipelineConfig["sources"]));
 
     sourceTasks.push({
       source: manifest.id,
@@ -279,7 +303,7 @@ export async function discoverJobsStep(args: {
   progressHelpers.startCrawling(totalSources);
 
   if (args.shouldCancel?.()) {
-    return { discoveredJobs, sourceErrors };
+    return { discoveredJobs, sourceErrors, sourcesUsed };
   }
 
   const sourceResults = await asyncPool({
@@ -375,7 +399,11 @@ export async function discoverJobsStep(args: {
   }
 
   if (args.shouldCancel?.()) {
-    return { discoveredJobs: filteredDiscoveredJobs, sourceErrors };
+    return {
+      discoveredJobs: filteredDiscoveredJobs,
+      sourceErrors,
+      sourcesUsed,
+    };
   }
 
   if (filteredDiscoveredJobs.length === 0 && sourceErrors.length > 0) {
@@ -388,5 +416,5 @@ export async function discoverJobsStep(args: {
 
   progressHelpers.crawlingComplete(filteredDiscoveredJobs.length);
 
-  return { discoveredJobs: filteredDiscoveredJobs, sourceErrors };
+  return { discoveredJobs: filteredDiscoveredJobs, sourceErrors, sourcesUsed };
 }

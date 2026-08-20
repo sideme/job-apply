@@ -3,9 +3,11 @@
  */
 
 import { randomUUID } from "node:crypto";
+import { classifyJobEngagement } from "@shared/job-engagement";
 import { inferJobLevel } from "@shared/job-level";
 import type {
   CreateJobInput,
+  EmploymentTypeCategory,
   Job,
   JobLevel,
   JobListItem,
@@ -14,12 +16,33 @@ import type {
   JobsRevisionResponse,
   UpdateJobInput,
 } from "@shared/types";
-import { and, desc, eq, inArray, isNull, lt, ne, sql } from "drizzle-orm";
+import {
+  and,
+  desc,
+  eq,
+  gte,
+  inArray,
+  isNull,
+  lt,
+  ne,
+  or,
+  sql,
+} from "drizzle-orm";
 import { db, schema } from "../db/index";
 import { createJobDuplicateIndex } from "../services/job-deduplication";
 import { normalizePostingDate } from "../services/posting-date";
 
 const { jobs } = schema;
+
+export type JobPostingRange = {
+  start: string;
+  end: string;
+};
+
+export type JobDateFilter = {
+  posting: JobPostingRange;
+  discovery: JobPostingRange;
+};
 
 function normalizeStatusFilter(statuses?: JobStatus[]): string | null {
   if (!statuses || statuses.length === 0) return null;
@@ -34,6 +57,13 @@ function normalizeSearch(search?: string): string | null {
 function normalizeJobLevelFilter(jobLevels?: JobLevel[]): string | null {
   if (!jobLevels || jobLevels.length === 0) return null;
   return Array.from(new Set(jobLevels)).sort().join(",");
+}
+
+function normalizeEmploymentTypeFilter(
+  employmentTypes?: EmploymentTypeCategory[],
+): string | null {
+  if (!employmentTypes || employmentTypes.length === 0) return null;
+  return Array.from(new Set(employmentTypes)).sort().join(",");
 }
 
 export function buildJobsFtsQuery(search?: string): string | null {
@@ -61,6 +91,8 @@ function buildJobsWhere(
   search?: string,
   jobLevels?: JobLevel[],
   sources?: JobSource[],
+  employmentTypes?: EmploymentTypeCategory[],
+  dateFilter?: JobDateFilter,
 ) {
   const statusClause =
     statuses && statuses.length > 0
@@ -73,6 +105,22 @@ function buildJobsWhere(
   const sourceClause = sources?.length
     ? inArray(jobs.source, sources)
     : undefined;
+  const employmentTypeClause = employmentTypes?.length
+    ? inArray(jobs.employmentTypeCategory, employmentTypes)
+    : undefined;
+  const selectedDateClause = dateFilter
+    ? or(
+        and(
+          gte(jobs.datePosted, dateFilter.posting.start),
+          lt(jobs.datePosted, dateFilter.posting.end),
+        ),
+        and(
+          isNull(jobs.datePosted),
+          gte(jobs.discoveredAt, dateFilter.discovery.start),
+          lt(jobs.discoveredAt, dateFilter.discovery.end),
+        ),
+      )
+    : undefined;
 
   return and(
     isNull(jobs.duplicateOfJobId),
@@ -80,6 +128,8 @@ function buildJobsWhere(
     searchClause,
     jobLevelClause,
     sourceClause,
+    employmentTypeClause,
+    selectedDateClause,
   );
 }
 
@@ -93,11 +143,23 @@ export async function getAllJobs(
   offset = 0,
   jobLevels?: JobLevel[],
   sources?: JobSource[],
+  employmentTypes?: EmploymentTypeCategory[],
+  dateFilter?: JobDateFilter,
 ): Promise<Job[]> {
-  const whereClause = buildJobsWhere(statuses, search, jobLevels, sources);
+  const whereClause = buildJobsWhere(
+    statuses,
+    search,
+    jobLevels,
+    sources,
+    employmentTypes,
+    dateFilter,
+  );
   const baseQuery = db.select().from(jobs);
   const filteredQuery = whereClause ? baseQuery.where(whereClause) : baseQuery;
-  const orderedQuery = filteredQuery.orderBy(desc(jobs.discoveredAt));
+  const orderedQuery = filteredQuery.orderBy(
+    desc(jobs.discoveredAt),
+    desc(jobs.id),
+  );
   const query =
     typeof limit === "number"
       ? orderedQuery.limit(limit).offset(offset)
@@ -117,6 +179,8 @@ export async function getJobListItems(
   offset = 0,
   jobLevels?: JobLevel[],
   sources?: JobSource[],
+  employmentTypes?: EmploymentTypeCategory[],
+  dateFilter?: JobDateFilter,
 ): Promise<JobListItem[]> {
   const selection = {
     id: jobs.id,
@@ -138,6 +202,10 @@ export async function getJobListItems(
     keywordMissing: jobs.keywordMissing,
     suitabilityReasonSource: jobs.suitabilityReasonSource,
     jobType: jobs.jobType,
+    employmentTypeCategory: jobs.employmentTypeCategory,
+    employmentTypeReason: jobs.employmentTypeReason,
+    hiringOrganizationCategory: jobs.hiringOrganizationCategory,
+    hiringOrganizationReason: jobs.hiringOrganizationReason,
     jobLevelCategory: jobs.jobLevelCategory,
     jobFunction: jobs.jobFunction,
     salaryMinAmount: jobs.salaryMinAmount,
@@ -148,7 +216,14 @@ export async function getJobListItems(
     updatedAt: jobs.updatedAt,
   } as const;
 
-  const whereClause = buildJobsWhere(statuses, search, jobLevels, sources);
+  const whereClause = buildJobsWhere(
+    statuses,
+    search,
+    jobLevels,
+    sources,
+    employmentTypes,
+    dateFilter,
+  );
   const baseQuery = db.select(selection).from(jobs);
   const filteredQuery = whereClause ? baseQuery.where(whereClause) : baseQuery;
   // Freshest posting first, then best match within the same post date.
@@ -157,6 +232,8 @@ export async function getJobListItems(
   const orderedQuery = filteredQuery.orderBy(
     desc(jobs.datePosted),
     desc(jobs.suitabilityScore),
+    desc(jobs.discoveredAt),
+    desc(jobs.id),
   );
   const query =
     typeof limit === "number"
@@ -179,13 +256,23 @@ export async function getJobsRevision(
   search?: string,
   jobLevels?: JobLevel[],
   sources?: JobSource[],
+  employmentTypes?: EmploymentTypeCategory[],
+  dateFilter?: JobDateFilter,
 ): Promise<JobsRevisionResponse> {
   const statusFilter = normalizeStatusFilter(statuses);
   const jobLevelFilter = normalizeJobLevelFilter(jobLevels);
   const sourceFilter = sources?.length
     ? Array.from(new Set(sources)).sort().join(",")
     : null;
-  const whereClause = buildJobsWhere(statuses, search, jobLevels, sources);
+  const employmentTypeFilter = normalizeEmploymentTypeFilter(employmentTypes);
+  const whereClause = buildJobsWhere(
+    statuses,
+    search,
+    jobLevels,
+    sources,
+    employmentTypes,
+    dateFilter,
+  );
 
   const baseQuery = db
     .select({
@@ -200,7 +287,10 @@ export async function getJobsRevision(
   const latestUpdatedAt = row?.latestUpdatedAt ?? null;
   const total = row?.total ?? 0;
   const normalizedSearch = normalizeSearch(search);
-  const revision = `${latestUpdatedAt ?? "none"}:${total}:${statusFilter ?? "all"}:${normalizedSearch ?? ""}:${jobLevelFilter ?? "all-levels"}:${sourceFilter ?? "all-sources"}`;
+  const normalizedDateFilter = dateFilter
+    ? `${dateFilter.posting.start}/${dateFilter.posting.end}:${dateFilter.discovery.start}/${dateFilter.discovery.end}`
+    : "all-dates";
+  const revision = `${latestUpdatedAt ?? "none"}:${total}:${statusFilter ?? "all"}:${normalizedSearch ?? ""}:${jobLevelFilter ?? "all-levels"}:${sourceFilter ?? "all-sources"}:${employmentTypeFilter ?? "all-employment-types"}:${normalizedDateFilter}`;
 
   return {
     revision,
@@ -266,9 +356,41 @@ export async function getAllJobUrls(): Promise<string[]> {
   return rows.map((r) => r.jobUrl);
 }
 
+export async function listJobsForDuplicateIndex(): Promise<
+  Array<{
+    id: string;
+    source: string;
+    sourceJobId: string | null;
+    title: string;
+    employer: string;
+    location: string | null;
+    datePosted: string | null;
+    jobUrl: string;
+    jobUrlDirect: string | null;
+    applicationLink: string | null;
+  }>
+> {
+  return db
+    .select({
+      id: jobs.id,
+      source: jobs.source,
+      sourceJobId: jobs.sourceJobId,
+      title: jobs.title,
+      employer: jobs.employer,
+      location: jobs.location,
+      datePosted: jobs.datePosted,
+      jobUrl: jobs.jobUrl,
+      jobUrlDirect: jobs.jobUrlDirect,
+      applicationLink: jobs.applicationLink,
+    })
+    .from(jobs)
+    .where(isNull(jobs.duplicateOfJobId));
+}
+
 async function insertJob(input: CreateJobInput): Promise<Job> {
   const id = randomUUID();
   const now = new Date().toISOString();
+  const engagement = classifyJobEngagement(input);
 
   await db.insert(jobs).values({
     id,
@@ -315,6 +437,7 @@ async function insertJob(input: CreateJobInput): Promise<Job> {
     companyReviewsCount: input.companyReviewsCount ?? null,
     vacancyCount: input.vacancyCount ?? null,
     workFromHomeType: input.workFromHomeType ?? null,
+    ...engagement,
     status: "discovered",
     discoveredAt: now,
     createdAt: now,
@@ -461,13 +584,35 @@ export async function updateJob(
 ): Promise<Job | null> {
   const now = new Date().toISOString();
   let jobLevelCategory: JobLevel | null | undefined;
-  if (input.title !== undefined || input.jobLevel !== undefined) {
+  let engagement: ReturnType<typeof classifyJobEngagement> | undefined;
+  const shouldRefreshJobLevel =
+    input.title !== undefined || input.jobLevel !== undefined;
+  const shouldRefreshEngagement =
+    input.title !== undefined ||
+    input.employer !== undefined ||
+    input.jobDescription !== undefined;
+  if (shouldRefreshJobLevel || shouldRefreshEngagement) {
     const current = await getJobById(id);
     if (!current) return null;
-    jobLevelCategory = inferJobLevel(
-      input.jobLevel !== undefined ? input.jobLevel : current.jobLevel,
-      input.title ?? current.title,
-    );
+    if (shouldRefreshJobLevel) {
+      jobLevelCategory = inferJobLevel(
+        input.jobLevel !== undefined ? input.jobLevel : current.jobLevel,
+        input.title ?? current.title,
+      );
+    }
+    if (shouldRefreshEngagement) {
+      engagement = classifyJobEngagement({
+        title: input.title ?? current.title,
+        employer: input.employer ?? current.employer,
+        jobType: current.jobType,
+        listingType: current.listingType,
+        jobDescription:
+          input.jobDescription !== undefined
+            ? input.jobDescription
+            : current.jobDescription,
+        companyDescription: current.companyDescription,
+      });
+    }
   }
 
   await db
@@ -475,6 +620,7 @@ export async function updateJob(
     .set({
       ...input,
       ...(jobLevelCategory !== undefined ? { jobLevelCategory } : {}),
+      ...(engagement ?? {}),
       updatedAt: now,
       ...(input.status === "processing" ? { processedAt: now } : {}),
       ...(input.status === "applied" && !input.appliedAt
@@ -528,8 +674,17 @@ export async function getJobStats(
   search?: string,
   jobLevels?: JobLevel[],
   sources?: JobSource[],
+  employmentTypes?: EmploymentTypeCategory[],
+  dateFilter?: JobDateFilter,
 ): Promise<Record<JobStatus, number>> {
-  const whereClause = buildJobsWhere(undefined, search, jobLevels, sources);
+  const whereClause = buildJobsWhere(
+    undefined,
+    search,
+    jobLevels,
+    sources,
+    employmentTypes,
+    dateFilter,
+  );
   const baseQuery = db
     .select({
       status: jobs.status,
@@ -674,6 +829,17 @@ function mapRowToJob(row: typeof jobs.$inferSelect): Job {
     jobEmbedding: row.jobEmbedding ?? null,
     jobEmbeddingModel: row.jobEmbeddingModel ?? null,
     jobEmbeddingHash: row.jobEmbeddingHash ?? null,
+    llmFitScore: row.llmFitScore ?? null,
+    llmFitVerdict: (row.llmFitVerdict as Job["llmFitVerdict"]) ?? null,
+    llmFitPoints: row.llmFitPoints ?? null,
+    llmFitGaps: row.llmFitGaps ?? null,
+    llmFitStatus: (row.llmFitStatus as Job["llmFitStatus"]) ?? null,
+    llmFitError: row.llmFitError ?? null,
+    llmFitProvider: row.llmFitProvider ?? null,
+    llmFitModel: row.llmFitModel ?? null,
+    llmFitPromptVersion: row.llmFitPromptVersion ?? null,
+    llmFitInputHash: row.llmFitInputHash ?? null,
+    llmFitAt: row.llmFitAt ?? null,
     tailoredSummary: row.tailoredSummary,
     tailoredHeadline: row.tailoredHeadline ?? null,
     tailoredSkills: row.tailoredSkills ?? null,
@@ -706,6 +872,14 @@ function mapRowToJob(row: typeof jobs.$inferSelect): Job {
     companyReviewsCount: row.companyReviewsCount ?? null,
     vacancyCount: row.vacancyCount ?? null,
     workFromHomeType: row.workFromHomeType ?? null,
+    employmentTypeCategory:
+      (row.employmentTypeCategory as Job["employmentTypeCategory"]) ??
+      "unknown",
+    employmentTypeReason: row.employmentTypeReason ?? null,
+    hiringOrganizationCategory:
+      (row.hiringOrganizationCategory as Job["hiringOrganizationCategory"]) ??
+      "unknown",
+    hiringOrganizationReason: row.hiringOrganizationReason ?? null,
     discoveredAt: row.discoveredAt,
     processedAt: row.processedAt,
     appliedAt: row.appliedAt,

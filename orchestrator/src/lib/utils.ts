@@ -83,6 +83,21 @@ export const formatPostingDateTime = (
   return { label: `${dateLabel}, ${timeLabel} UTC`, hasTime: true };
 };
 
+export const formatDiscoveryDate = (
+  dateStr?: string | null,
+  timeZone = "America/Toronto",
+): string | null => {
+  if (!dateStr) return null;
+  const parsed = parseDateInput(dateStr);
+  if (!parsed) return null;
+  return parsed.toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    timeZone,
+  });
+};
+
 export const formatTimestamp = (value?: number | null) => {
   if (!value) return "No due date";
   return new Date(value * 1000).toLocaleDateString("en-GB", {

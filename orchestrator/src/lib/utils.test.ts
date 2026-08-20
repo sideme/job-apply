@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { formatDate, formatPostingDateTime, safeFilenamePart } from "./utils";
+import {
+  formatDate,
+  formatDiscoveryDate,
+  formatPostingDateTime,
+  safeFilenamePart,
+} from "./utils";
 
 describe("formatDate", () => {
   it("formats source-provided epoch milliseconds", () => {
@@ -28,6 +33,14 @@ describe("formatPostingDateTime", () => {
       label: "7 Aug 2026",
       hasTime: false,
     });
+  });
+});
+
+describe("formatDiscoveryDate", () => {
+  it("formats the collection date in the configured job timezone", () => {
+    expect(
+      formatDiscoveryDate("2026-08-20T02:30:00.000Z", "America/Toronto"),
+    ).toBe("19 Aug 2026");
   });
 });
 

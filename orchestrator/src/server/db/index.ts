@@ -25,6 +25,12 @@ export const db = drizzle(sqlite, { schema });
 
 export { schema };
 
+/** Internal escape hatch for SQLite operations that require an IMMEDIATE
+ * transaction. Domain repositories should prefer Drizzle for ordinary queries. */
+export function getSqliteClient(): Database.Database {
+  return sqlite;
+}
+
 export function closeDb() {
   sqlite.close();
 }

@@ -84,9 +84,76 @@ export type ProviderStrategy = {
     baseUrl: string;
     apiKey: string | null;
   }) => string[];
+  buildAgentRequest?: (args: {
+    baseUrl: string;
+    apiKey: string | null;
+    model: string;
+    messages: AgentMessage[];
+    tools: AgentToolDefinition[];
+    maxOutputTokens: number;
+  }) => AgentProviderRequest;
+  extractAgentTurn?: (response: unknown) => AgentTurn;
 };
 
 export interface LlmApiError extends Error {
   status?: number;
   body?: string;
 }
+
+export type AgentToolCall = {
+  id: string;
+  type: "function";
+  function: {
+    name: string;
+    arguments: string;
+  };
+};
+
+export type AgentMessage =
+  | { role: "system" | "user"; content: string }
+  | {
+      role: "assistant";
+      content: string | null;
+      toolCalls?: AgentToolCall[];
+      reasoningContent?: string | null;
+    }
+  | { role: "tool"; toolCallId: string; content: string };
+
+export type AgentToolDefinition = {
+  name: string;
+  description: string;
+  parameters: Record<string, unknown>;
+};
+
+export type AgentTurn = {
+  message: Extract<AgentMessage, { role: "assistant" }>;
+  finishReason: string | null;
+  usage: {
+    inputTokens: number;
+    outputTokens: number;
+  };
+};
+
+export type AgentTurnRequestOptions = {
+  model: string;
+  messages: AgentMessage[];
+  tools: AgentToolDefinition[];
+  maxOutputTokens: number;
+  timeoutMs: number;
+  signal?: AbortSignal;
+  jobId?: string;
+};
+
+export type AgentTurnResponse =
+  | { success: true; data: AgentTurn }
+  | {
+      success: false;
+      error: string;
+      code: "AGENT_UNAVAILABLE" | "REQUEST_FAILED" | "REQUEST_TIMEOUT";
+    };
+
+export type AgentProviderRequest = {
+  url: string;
+  headers: Record<string, string>;
+  body: unknown;
+};

@@ -103,7 +103,7 @@ const PROVIDER_HINTS: Record<LlmProviderId, string> = {
     "Use a bearer token with any chat-completions-compatible endpoint.",
   gemini: "Gemini uses the native AI Studio API and requires a key.",
   deepseek:
-    "DeepSeek uses an OpenAI-compatible API and requires a DeepSeek API key.",
+    "DeepSeek uses an OpenAI-compatible API. Use deepseek-v4-flash by default; it requires a DeepSeek API key.",
   qwen: "Qwen uses Alibaba Cloud Model Studio's OpenAI-compatible API and requires an API key.",
 };
 

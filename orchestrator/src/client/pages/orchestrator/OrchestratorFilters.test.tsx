@@ -38,6 +38,10 @@ const renderFilters = (
     onSourceFilterChange: vi.fn(),
     jobLevelFilters: [],
     onJobLevelFiltersChange: vi.fn(),
+    employmentTypeFilters: [],
+    onEmploymentTypeFiltersChange: vi.fn(),
+    discoveredDate: "2026-08-19",
+    onDiscoveredDateChange: vi.fn(),
     salaryFilter: {
       mode: "at_least" as const,
       min: null,
@@ -59,6 +63,23 @@ const renderFilters = (
 };
 
 describe("OrchestratorFilters", () => {
+  it("shows a working calendar only on Discovered and emits date changes", () => {
+    const { props, rerender } = renderFilters({ activeTab: "discovered" });
+
+    const dateButton = screen.getByRole("button", {
+      name: /choose discovered date/i,
+    });
+    expect(dateButton).toHaveTextContent("Aug 19, 2026");
+    fireEvent.click(dateButton);
+    fireEvent.click(screen.getByRole("button", { name: "August 18, 2026" }));
+    expect(props.onDiscoveredDateChange).toHaveBeenCalledWith("2026-08-18");
+
+    rerender(<OrchestratorFilters {...props} activeTab="ready" />);
+    expect(
+      screen.queryByRole("button", { name: /choose discovered date/i }),
+    ).not.toBeInTheDocument();
+  });
+
   it("notifies when tabs and command search shortcut are used", () => {
     const { props } = renderFilters();
 
@@ -129,6 +150,26 @@ describe("OrchestratorFilters", () => {
       key: "score",
       direction: "asc",
     });
+  });
+
+  it("adds another employment type without replacing the existing selection", async () => {
+    const { props } = renderFilters({ employmentTypeFilters: ["full_time"] });
+    fireEvent.click(screen.getByRole("button", { name: /^filters/i }));
+    fireEvent.click(
+      screen.getByRole("combobox", { name: "Employment type filters" }),
+    );
+    fireEvent.change(
+      await screen.findByRole("combobox", {
+        name: "Search employment types...",
+      }),
+      { target: { value: "contract" } },
+    );
+    fireEvent.click(await screen.findByText("Contract"));
+
+    expect(props.onEmploymentTypeFiltersChange).toHaveBeenCalledWith([
+      "full_time",
+      "contract",
+    ]);
   });
 
   it("adds another job level without replacing the existing selection", async () => {

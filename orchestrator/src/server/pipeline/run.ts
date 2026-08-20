@@ -8,9 +8,14 @@
 import "../config/env";
 import type { PipelineConfig } from "@shared/types";
 import { closeDb } from "../db/index";
+import { applyStoredEnvOverrides } from "../services/envSettings";
 import { runPipeline } from "./orchestrator";
 
 async function main() {
+  // The standalone scheduler process does not start the HTTP server, so it
+  // must hydrate persisted provider credentials before constructing LLM clients.
+  await applyStoredEnvOverrides();
+
   console.log("=".repeat(60));
   console.log("🚀 Job Pipeline Runner");
   console.log(`   Started at: ${new Date().toISOString()}`);

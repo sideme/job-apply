@@ -143,6 +143,140 @@ export const settingsRegistry = {
     serialize: (value: string | null | undefined): string | null =>
       value ?? null,
   },
+  agenticDiscoveryEnabled: {
+    kind: "typed" as const,
+    schema: z.boolean(),
+    default: (): boolean => false,
+    parse: parseBitBoolOrNull,
+    serialize: serializeBitBool,
+  },
+  agenticFitJudgeEnabled: {
+    kind: "typed" as const,
+    schema: z.boolean(),
+    default: (): boolean => false,
+    parse: parseBitBoolOrNull,
+    serialize: serializeBitBool,
+  },
+  agentMaxRunsPerLocalDay: {
+    kind: "typed" as const,
+    schema: z.number().int().min(1).max(5),
+    default: (): number => 1,
+    parse: (raw: string | undefined): number | null => {
+      const value = parseIntOrNull(raw);
+      return value === null ? null : Math.min(5, Math.max(1, value));
+    },
+    serialize: serializeNullableNumber,
+  },
+  agentMaxSearchIterations: {
+    kind: "typed" as const,
+    schema: z.number().int().min(1).max(20),
+    default: (): number => 6,
+    parse: (raw: string | undefined): number | null => {
+      const value = parseIntOrNull(raw);
+      return value === null ? null : Math.min(20, Math.max(1, value));
+    },
+    serialize: serializeNullableNumber,
+  },
+  agentMaxSearchesPerRun: {
+    kind: "typed" as const,
+    schema: z.number().int().min(1).max(50),
+    default: (): number => 10,
+    parse: (raw: string | undefined): number | null => {
+      const value = parseIntOrNull(raw);
+      return value === null ? null : Math.min(50, Math.max(1, value));
+    },
+    serialize: serializeNullableNumber,
+  },
+  agentMaxLinkedinSearches: {
+    kind: "typed" as const,
+    schema: z.number().int().min(0).max(10),
+    default: (): number => 2,
+    parse: (raw: string | undefined): number | null => {
+      const value = parseIntOrNull(raw);
+      return value === null ? null : Math.min(10, Math.max(0, value));
+    },
+    serialize: serializeNullableNumber,
+  },
+  agentMaxAdzunaSearches: {
+    kind: "typed" as const,
+    schema: z.number().int().min(0).max(20),
+    default: (): number => 3,
+    parse: (raw: string | undefined): number | null => {
+      const value = parseIntOrNull(raw);
+      return value === null ? null : Math.min(20, Math.max(0, value));
+    },
+    serialize: serializeNullableNumber,
+  },
+  agentStopWhenNewBelow: {
+    kind: "typed" as const,
+    schema: z.number().int().min(0).max(100),
+    default: (): number => 3,
+    parse: (raw: string | undefined): number | null => {
+      const value = parseIntOrNull(raw);
+      return value === null ? null : Math.min(100, Math.max(0, value));
+    },
+    serialize: serializeNullableNumber,
+  },
+  agentMaxFitJudgments: {
+    kind: "typed" as const,
+    schema: z.number().int().min(1).max(100),
+    default: (): number => 20,
+    parse: (raw: string | undefined): number | null => {
+      const value = parseIntOrNull(raw);
+      return value === null ? null : Math.min(100, Math.max(1, value));
+    },
+    serialize: serializeNullableNumber,
+  },
+  agentFitPendingTtlDays: {
+    kind: "typed" as const,
+    schema: z.number().int().min(1).max(30),
+    default: (): number => 7,
+    parse: (raw: string | undefined): number | null => {
+      const value = parseIntOrNull(raw);
+      return value === null ? null : Math.min(30, Math.max(1, value));
+    },
+    serialize: serializeNullableNumber,
+  },
+  agentMaxInputTokensPerRun: {
+    kind: "typed" as const,
+    schema: z.number().int().min(1000).max(500000),
+    default: (): number => 100000,
+    parse: (raw: string | undefined): number | null => {
+      const value = parseIntOrNull(raw);
+      return value === null ? null : Math.min(500000, Math.max(1000, value));
+    },
+    serialize: serializeNullableNumber,
+  },
+  agentMaxOutputTokensPerRun: {
+    kind: "typed" as const,
+    schema: z.number().int().min(500).max(100000),
+    default: (): number => 12000,
+    parse: (raw: string | undefined): number | null => {
+      const value = parseIntOrNull(raw);
+      return value === null ? null : Math.min(100000, Math.max(500, value));
+    },
+    serialize: serializeNullableNumber,
+  },
+  agentMaxJdChars: {
+    kind: "typed" as const,
+    schema: z.number().int().min(1000).max(30000),
+    default: (): number => 12000,
+    parse: (raw: string | undefined): number | null => {
+      const value = parseIntOrNull(raw);
+      return value === null ? null : Math.min(30000, Math.max(1000, value));
+    },
+    serialize: serializeNullableNumber,
+  },
+  agentRequestTimeoutMs: {
+    kind: "typed" as const,
+    schema: z.number().int().min(5000).max(180000),
+    default: (): number => 60000,
+    parse: (raw: string | undefined): number | null => {
+      const value = parseIntOrNull(raw);
+      return value === null ? null : Math.min(180000, Math.max(5000, value));
+    },
+    serialize: serializeNullableNumber,
+  },
   pipelineWebhookUrl: {
     kind: "typed" as const,
     schema: z.string().trim().max(2000),
@@ -517,6 +651,10 @@ export const settingsRegistry = {
 
   // --- Model Variants ---
   modelScorer: {
+    kind: "model" as const,
+    schema: z.string().trim().max(200),
+  },
+  agentModel: {
     kind: "model" as const,
     schema: z.string().trim().max(200),
   },

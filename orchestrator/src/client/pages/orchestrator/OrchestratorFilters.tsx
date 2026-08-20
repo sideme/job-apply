@@ -1,6 +1,9 @@
 import { KbdHint } from "@client/components/KbdHint";
 import { getDisplayKey, SHORTCUTS } from "@client/lib/shortcut-map";
 import {
+  EMPLOYMENT_TYPE_CATEGORIES,
+  EMPLOYMENT_TYPE_LABELS,
+  type EmploymentTypeCategory,
   JOB_LEVEL_LABELS,
   JOB_LEVELS,
   type JobLevel,
@@ -39,6 +42,7 @@ import type {
   SalaryFilterMode,
 } from "./constants";
 import { defaultSortDirection, orderedFilterSources, tabs } from "./constants";
+import { DiscoveredDatePicker } from "./DiscoveredDatePicker";
 
 interface OrchestratorFiltersProps {
   activeTab: FilterTab;
@@ -49,6 +53,10 @@ interface OrchestratorFiltersProps {
   onSourceFilterChange: (value: JobSource | "all") => void;
   jobLevelFilters: JobLevel[];
   onJobLevelFiltersChange: (values: JobLevel[]) => void;
+  employmentTypeFilters: EmploymentTypeCategory[];
+  onEmploymentTypeFiltersChange: (values: EmploymentTypeCategory[]) => void;
+  discoveredDate: string;
+  onDiscoveredDateChange: (value: string) => void;
   salaryFilter: SalaryFilter;
   onSalaryFilterChange: (value: SalaryFilter) => void;
   sourcesWithJobs: JobSource[];
@@ -81,6 +89,19 @@ const jobLevelOptions = [
           : level.replaceAll("_", " "),
   })),
 ];
+
+const employmentTypeOptions = EMPLOYMENT_TYPE_CATEGORIES.map(
+  (employmentType) => ({
+    value: employmentType,
+    label:
+      employmentType === "full_time"
+        ? "Full-time (permanence not stated)"
+        : employmentType === "unknown"
+          ? "Not stated"
+          : EMPLOYMENT_TYPE_LABELS[employmentType],
+    searchText: employmentType.replaceAll("_", " "),
+  }),
+);
 
 const sortFieldOrder: JobSort["key"][] = [
   "score",
@@ -128,6 +149,10 @@ export const OrchestratorFilters: React.FC<OrchestratorFiltersProps> = ({
   onSourceFilterChange,
   jobLevelFilters,
   onJobLevelFiltersChange,
+  employmentTypeFilters,
+  onEmploymentTypeFiltersChange,
+  discoveredDate,
+  onDiscoveredDateChange,
   salaryFilter,
   onSalaryFilterChange,
   sourcesWithJobs,
@@ -151,11 +176,18 @@ export const OrchestratorFilters: React.FC<OrchestratorFiltersProps> = ({
     () =>
       Number(sourceFilter !== "all") +
       Number(jobLevelFilters.length > 0) +
+      Number(employmentTypeFilters.length > 0) +
       Number(
         (typeof salaryFilter.min === "number" && salaryFilter.min > 0) ||
           (typeof salaryFilter.max === "number" && salaryFilter.max > 0),
       ),
-    [sourceFilter, jobLevelFilters.length, salaryFilter.min, salaryFilter.max],
+    [
+      sourceFilter,
+      jobLevelFilters.length,
+      employmentTypeFilters.length,
+      salaryFilter.min,
+      salaryFilter.max,
+    ],
   );
   const showSalaryMin =
     salaryFilter.mode === "at_least" || salaryFilter.mode === "between";
@@ -188,6 +220,13 @@ export const OrchestratorFilters: React.FC<OrchestratorFiltersProps> = ({
         </TabsList>
 
         <div className="flex lg:flex-nowrap flex-wrap items-center justify-end gap-2">
+          {activeTab === "discovered" && (
+            <DiscoveredDatePicker
+              value={discoveredDate}
+              onChange={onDiscoveredDateChange}
+            />
+          )}
+
           <Button
             type="button"
             variant="ghost"
@@ -236,7 +275,8 @@ export const OrchestratorFilters: React.FC<OrchestratorFiltersProps> = ({
                     )}
                   </SheetTitle>
                   <SheetDescription>
-                    Refine sources, job level, salary, and sorting.
+                    Refine sources, employment type, job level, salary, and
+                    sorting.
                   </SheetDescription>
                 </SheetHeader>
 
@@ -269,6 +309,35 @@ export const OrchestratorFilters: React.FC<OrchestratorFiltersProps> = ({
                           {sourceLabel[source]}
                         </Button>
                       ))}
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader className="pb-3">
+                      <CardTitle>Employment type</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-2">
+                      <SearchableMultiSelectDropdown
+                        values={employmentTypeFilters}
+                        options={employmentTypeOptions}
+                        onValuesChange={(values) =>
+                          onEmploymentTypeFiltersChange(
+                            values as EmploymentTypeCategory[],
+                          )
+                        }
+                        placeholder="All employment types"
+                        searchPlaceholder="Search employment types..."
+                        emptyText="No matching employment type."
+                        ariaLabel="Employment type filters"
+                        triggerClassName="w-full"
+                        contentClassName="w-[var(--radix-popover-trigger-width)]"
+                        portalContainer={sheetContent}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Multiple selections are combined. Permanent full-time is
+                        kept separate from full-time jobs whose permanence is
+                        not stated.
+                      </p>
                     </CardContent>
                   </Card>
 

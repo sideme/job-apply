@@ -1,6 +1,7 @@
 import * as api from "@client/api";
 import { subscribeToEventSource } from "@client/lib/sse";
 import type {
+  EmploymentTypeCategory,
   Job,
   JobLevel,
   JobListItem,
@@ -26,6 +27,7 @@ const isDocumentVisible = () =>
   typeof document === "undefined" || document.visibilityState === "visible";
 const JOBS_PAGE_SIZE = 60;
 const EMPTY_JOB_LEVELS: JobLevel[] = [];
+const EMPTY_EMPLOYMENT_TYPES: EmploymentTypeCategory[] = [];
 
 const statusesForTab = (tab: "ready" | "discovered" | "applied" | "all") => {
   if (tab === "ready") return ["ready", "processing"];
@@ -101,6 +103,8 @@ export const useOrchestratorData = (
   activeTab: "ready" | "discovered" | "applied" | "all" = "all",
   jobLevels: JobLevel[] = EMPTY_JOB_LEVELS,
   sourceFilter: JobSource | "all" = "all",
+  employmentTypes: EmploymentTypeCategory[] = EMPTY_EMPLOYMENT_TYPES,
+  discoveredDate?: string,
 ) => {
   const queryClient = useQueryClient();
   const [jobListItems, setJobListItems] = useState<JobListItem[]>([]);
@@ -234,15 +238,47 @@ export const useOrchestratorData = (
     pendingLoadCountRef.current += 1;
     try {
       setIsLoading(true);
-      const data = await api.getJobs({
+      const requestOptions = {
         view: "list",
         statuses: statusesForTab(activeTab),
         ...(normalizedSearchQuery ? { search: normalizedSearchQuery } : {}),
         ...(jobLevels.length ? { jobLevels } : {}),
         ...(sourceFilter !== "all" ? { sources: [sourceFilter] } : {}),
+        ...(employmentTypes.length ? { employmentTypes } : {}),
+        ...(discoveredDate ? { discoveredDate } : {}),
         limit: JOBS_PAGE_SIZE,
+      } as const;
+      const firstPage = await api.getJobs({
+        ...requestOptions,
         offset: 0,
       });
+      let data = firstPage;
+
+      if (discoveredDate && firstPage.jobs.length < firstPage.total) {
+        const completeJobs = [...firstPage.jobs];
+        let nextOffset = firstPage.offset + firstPage.jobs.length;
+
+        while (nextOffset < firstPage.total) {
+          const nextPage = await api.getJobs({
+            ...requestOptions,
+            offset: nextOffset,
+          });
+          if (nextPage.jobs.length === 0) {
+            throw new Error(
+              `Date-filtered job pagination stopped at ${completeJobs.length} of ${firstPage.total}`,
+            );
+          }
+          completeJobs.push(...nextPage.jobs);
+          nextOffset = nextPage.offset + nextPage.jobs.length;
+        }
+
+        if (completeJobs.length !== firstPage.total) {
+          throw new Error(
+            `Date-filtered job count mismatch: loaded ${completeJobs.length} of ${firstPage.total}`,
+          );
+        }
+        data = { ...firstPage, jobs: completeJobs, hasMore: false };
+      }
       queryClient.setQueryData(queryKeys.jobs.list({ view: "list" }), data);
       if (seq >= latestAppliedSeqRef.current) {
         latestAppliedSeqRef.current = seq;
@@ -267,7 +303,15 @@ export const useOrchestratorData = (
         setIsLoading(false);
       }
     }
-  }, [activeTab, jobLevels, normalizedSearchQuery, queryClient, sourceFilter]);
+  }, [
+    activeTab,
+    discoveredDate,
+    employmentTypes,
+    jobLevels,
+    normalizedSearchQuery,
+    queryClient,
+    sourceFilter,
+  ]);
 
   const loadMoreJobs = useCallback(async () => {
     if (isLoadingMore || !hasMoreJobs) return;
@@ -279,6 +323,8 @@ export const useOrchestratorData = (
         ...(normalizedSearchQuery ? { search: normalizedSearchQuery } : {}),
         ...(jobLevels.length ? { jobLevels } : {}),
         ...(sourceFilter !== "all" ? { sources: [sourceFilter] } : {}),
+        ...(employmentTypes.length ? { employmentTypes } : {}),
+        ...(discoveredDate ? { discoveredDate } : {}),
         limit: JOBS_PAGE_SIZE,
         offset: loadedJobsCountRef.current,
       });
@@ -308,6 +354,8 @@ export const useOrchestratorData = (
     }
   }, [
     activeTab,
+    discoveredDate,
+    employmentTypes,
     hasMoreJobs,
     isLoadingMore,
     jobLevels,
@@ -367,6 +415,8 @@ export const useOrchestratorData = (
             ...(normalizedSearchQuery ? { search: normalizedSearchQuery } : {}),
             ...(jobLevels.length ? { jobLevels } : {}),
             ...(sourceFilter !== "all" ? { sources: [sourceFilter] } : {}),
+            ...(employmentTypes.length ? { employmentTypes } : {}),
+            ...(discoveredDate ? { discoveredDate } : {}),
           }),
         staleTime: 0,
       });
@@ -386,6 +436,8 @@ export const useOrchestratorData = (
     }
   }, [
     activeTab,
+    discoveredDate,
+    employmentTypes,
     isRefreshPaused,
     jobLevels,
     loadJobs,

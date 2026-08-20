@@ -3,6 +3,7 @@
  */
 
 import { Router } from "express";
+import { agentRunsRouter } from "./routes/agent-runs";
 import { applicationAssistantRouter } from "./routes/application-assistant";
 import { backupRouter } from "./routes/backup";
 import { databaseRouter } from "./routes/database";
@@ -21,6 +22,7 @@ import { webhookRouter } from "./routes/webhook";
 export const apiRouter = Router();
 
 apiRouter.use("/application-assistant", applicationAssistantRouter);
+apiRouter.use("/agent-runs", agentRunsRouter);
 apiRouter.use("/jobs", jobsRouter);
 apiRouter.use("/jobs/:id/chat", ghostwriterRouter);
 apiRouter.use("/demo", demoRouter);

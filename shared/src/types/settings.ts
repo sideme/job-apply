@@ -150,6 +150,20 @@ export interface AppSettings {
   model: Resolved<string>;
   llmProvider: Resolved<string>;
   llmBaseUrl: Resolved<string>;
+  agenticDiscoveryEnabled: Resolved<boolean>;
+  agenticFitJudgeEnabled: Resolved<boolean>;
+  agentMaxRunsPerLocalDay: Resolved<number>;
+  agentMaxSearchIterations: Resolved<number>;
+  agentMaxSearchesPerRun: Resolved<number>;
+  agentMaxLinkedinSearches: Resolved<number>;
+  agentMaxAdzunaSearches: Resolved<number>;
+  agentStopWhenNewBelow: Resolved<number>;
+  agentMaxFitJudgments: Resolved<number>;
+  agentFitPendingTtlDays: Resolved<number>;
+  agentMaxInputTokensPerRun: Resolved<number>;
+  agentMaxOutputTokensPerRun: Resolved<number>;
+  agentMaxJdChars: Resolved<number>;
+  agentRequestTimeoutMs: Resolved<number>;
   pipelineWebhookUrl: Resolved<string>;
   jobCompleteWebhookUrl: Resolved<string>;
   whatsappEnabled: Resolved<boolean>;
@@ -183,6 +197,7 @@ export interface AppSettings {
 
   // Model variants (no own default, fallback to model.value):
   modelScorer: ModelResolved;
+  agentModel: ModelResolved;
   modelTailoring: ModelResolved;
   modelProjectSelection: ModelResolved;
 

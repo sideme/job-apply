@@ -31,4 +31,24 @@ describe("LlmService provider normalization", () => {
     expect(llm.getProvider()).toBe("openai_compatible");
     expect(llm.getBaseUrl()).toBe("https://llm.example.com");
   });
+
+  it("keeps agent tools unavailable without a key or verified model", () => {
+    expect(
+      new LlmService({ provider: "deepseek" }).getAgentAvailability(
+        "deepseek-v4-flash",
+      ),
+    ).toMatchObject({ available: false, reason: "LLM API key not configured" });
+    expect(
+      new LlmService({
+        provider: "qwen",
+        apiKey: "test-key",
+      }).getAgentAvailability("qwen-plus"),
+    ).toMatchObject({ available: false });
+    expect(
+      new LlmService({
+        provider: "deepseek",
+        apiKey: "test-key",
+      }).getAgentAvailability("deepseek-v4-flash"),
+    ).toEqual({ available: true, reason: null });
+  });
 });

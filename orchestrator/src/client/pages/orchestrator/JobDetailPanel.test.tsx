@@ -188,6 +188,27 @@ describe("JobDetailPanel", () => {
     expect(screen.getByText("Hello world")).toBeInTheDocument();
   });
 
+  it("shows the source company description in the overview", async () => {
+    await renderJobDetailPanel({
+      activeTab: "all",
+      activeJobs: [],
+      selectedJob: createJob({
+        employer: "Acme Labs",
+        companyDescription:
+          "Acme Labs builds software for distributed engineering teams.",
+      }),
+      onSelectJobId: vi.fn(),
+      onJobUpdated: vi.fn().mockResolvedValue(undefined),
+    });
+
+    expect(
+      screen.getByRole("region", { name: "About Acme Labs" }),
+    ).toHaveTextContent(
+      "Acme Labs builds software for distributed engineering teams.",
+    );
+    expect(screen.getByText("Source profile")).toBeInTheDocument();
+  });
+
   it("saves an edited description", async () => {
     const onJobUpdated = vi.fn().mockResolvedValue(undefined);
     vi.mocked(api.updateJob).mockResolvedValue(undefined as any);

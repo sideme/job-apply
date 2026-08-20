@@ -1,6 +1,10 @@
 import { logger } from "@infra/logger";
 import { toStringOrNull } from "@shared/utils/type-conversion";
 import {
+  AgentUnavailableError,
+  requireVerifiedAgentTools,
+} from "./agent-capabilities";
+import {
   buildModeCacheKey,
   getOrderedModes,
   rememberSuccessfulMode,
@@ -8,6 +12,8 @@ import {
 import { getRetryDelayMs, shouldRetryAttempt } from "./policies/retry-policy";
 import { strategies } from "./providers";
 import type {
+  AgentTurnRequestOptions,
+  AgentTurnResponse,
   JsonSchemaDefinition,
   LlmApiError,
   LlmProvider,
@@ -119,6 +125,115 @@ export class LlmService {
 
   getBaseUrl(): string {
     return this.baseUrl;
+  }
+
+  getAgentAvailability(model: string): {
+    available: boolean;
+    reason: string | null;
+  } {
+    if (this.strategy.requiresApiKey && !this.apiKey) {
+      return { available: false, reason: "LLM API key not configured" };
+    }
+    try {
+      requireVerifiedAgentTools({
+        provider: this.provider,
+        model,
+        thinkingMode: "non-thinking",
+      });
+      if (!this.strategy.buildAgentRequest || !this.strategy.extractAgentTurn) {
+        return {
+          available: false,
+          reason: "Provider does not implement the agent tool protocol",
+        };
+      }
+      return { available: true, reason: null };
+    } catch (error) {
+      return {
+        available: false,
+        reason:
+          error instanceof AgentUnavailableError
+            ? error.message
+            : "Agent tool protocol is unavailable",
+      };
+    }
+  }
+
+  async callAgentTurn(
+    options: AgentTurnRequestOptions,
+  ): Promise<AgentTurnResponse> {
+    const availability = this.getAgentAvailability(options.model);
+    if (!availability.available) {
+      return {
+        success: false,
+        code: "AGENT_UNAVAILABLE",
+        error: availability.reason ?? "Agent tool protocol is unavailable",
+      };
+    }
+
+    const buildAgentRequest = this.strategy.buildAgentRequest;
+    const extractAgentTurn = this.strategy.extractAgentTurn;
+    if (!buildAgentRequest || !extractAgentTurn) throw new Error("unreachable");
+
+    const timeoutSignal = AbortSignal.timeout(
+      Math.max(1, Math.trunc(options.timeoutMs)),
+    );
+    const signal = options.signal
+      ? AbortSignal.any([options.signal, timeoutSignal])
+      : timeoutSignal;
+
+    try {
+      const { url, headers, body } = buildAgentRequest({
+        baseUrl: this.baseUrl,
+        apiKey: this.apiKey,
+        model: options.model,
+        messages: options.messages,
+        tools: options.tools,
+        maxOutputTokens: Math.max(1, Math.trunc(options.maxOutputTokens)),
+      });
+      const response = await fetch(url, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(body),
+        signal,
+      });
+
+      if (!response.ok) {
+        const rawBody = await response.text().catch(() => "");
+        const parsedError = parseErrorMessage(rawBody);
+        const detail = parsedError ? ` - ${truncate(parsedError, 400)}` : "";
+        logger.warn("Agent LLM request failed", {
+          provider: this.provider,
+          model: options.model,
+          jobId: options.jobId ?? null,
+          status: response.status,
+          detail: parsedError ? truncate(parsedError, 200) : null,
+        });
+        return {
+          success: false,
+          code: "REQUEST_FAILED",
+          error: `LLM API error: ${response.status}${detail}`,
+        };
+      }
+
+      const data: unknown = await response.json();
+      return { success: true, data: extractAgentTurn(data) };
+    } catch (error) {
+      const timedOut = timeoutSignal.aborted && !options.signal?.aborted;
+      const message =
+        error instanceof Error ? error.message : "Agent LLM request failed";
+      logger.warn("Agent LLM request errored", {
+        provider: this.provider,
+        model: options.model,
+        jobId: options.jobId ?? null,
+        timedOut,
+        message: truncate(message, 300),
+      });
+      return {
+        success: false,
+        code: timedOut ? "REQUEST_TIMEOUT" : "REQUEST_FAILED",
+        error: timedOut ? "Agent LLM request timed out" : message,
+      };
+    }
   }
 
   async validateCredentials(): Promise<LlmValidationResult> {

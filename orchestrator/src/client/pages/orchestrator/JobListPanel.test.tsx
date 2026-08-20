@@ -52,11 +52,21 @@ describe("JobListPanel", () => {
         id: "job-1",
         title: "Backend Engineer",
         datePosted: "1786060800000",
+        suitabilityScore: 91,
+        suitabilityReasonSource: "llm",
+        employmentTypeCategory: "permanent_full_time",
+        employmentTypeReason: "Explicit permanent full-time position.",
       }),
       createJob({
         id: "job-2",
         title: "Frontend Engineer",
         employer: "Globex",
+        datePosted: null,
+        discoveredAt: "2026-08-20T02:30:00.000Z",
+        employmentTypeCategory: "contract",
+        employmentTypeReason: "Explicit contract position.",
+        hiringOrganizationCategory: "staffing_agency",
+        hiringOrganizationReason: "Recruiting for a client.",
       }),
     ];
 
@@ -78,6 +88,13 @@ describe("JobListPanel", () => {
       screen.getByRole("button", { name: /Backend Engineer/i }),
     ).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByText("Posted 7 Aug 2026")).toBeInTheDocument();
+    expect(screen.getByText("AI ATS")).toBeInTheDocument();
+    expect(screen.getByText("Permanent · Full-time")).toBeInTheDocument();
+    expect(screen.getByText("Contract")).toBeInTheDocument();
+    expect(screen.getByText("Staffing agency")).toBeInTheDocument();
+    expect(
+      screen.getByText("Found 19 Aug 2026 · post date unavailable"),
+    ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /Frontend Engineer/i }));
     expect(onSelectJob).toHaveBeenCalledWith("job-2");

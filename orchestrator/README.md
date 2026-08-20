@@ -44,7 +44,7 @@ orchestrator/
    The API key is optional during initial setup. In the default hybrid flow, job discovery, rule-based ATS scoring, and configured application answers run without a cloud LLM key. A dedicated embedding key can optionally add a bounded semantic signal; a chat key enables manual deep analysis and resume tailoring.
    To use the native OpenAI integration, set `LLM_PROVIDER=openai`.
    For third-party services that expose an OpenAI-style API but are not OpenAI itself, use `LLM_PROVIDER=openai-compatible`.
-   DeepSeek uses `LLM_PROVIDER=deepseek` with `https://api.deepseek.com`; Qwen uses `LLM_PROVIDER=qwen` with Alibaba Cloud Model Studio's compatible endpoint. Both use `LLM_API_KEY`.
+   DeepSeek uses `LLM_PROVIDER=deepseek` with `https://api.deepseek.com` and `deepseek-v4-flash` as the recommended model; Qwen uses `LLM_PROVIDER=qwen` with Alibaba Cloud Model Studio's compatible endpoint. Both use `LLM_API_KEY`. Legacy direct-DeepSeek `deepseek-chat`/`deepseek-reasoner` settings are migrated to `deepseek-v4-flash` because DeepSeek discontinued those aliases on 2026-07-24.
 
    In **Settings → Model**, you can add ordered **Company Model Rules**. A rule
    matches a company name or domain and can override the scoring, tailoring, or

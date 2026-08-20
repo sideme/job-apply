@@ -68,3 +68,21 @@ export type ScoringValues = {
   blockedCompanyKeywords: EffectiveDefault<string[]>;
   scoringInstructions: EffectiveDefault<string>;
 };
+
+export type AgentValues = {
+  model: string;
+  discoveryEnabled: EffectiveDefault<boolean>;
+  fitJudgeEnabled: EffectiveDefault<boolean>;
+  maxRunsPerLocalDay: EffectiveDefault<number>;
+  maxSearchIterations: EffectiveDefault<number>;
+  maxSearchesPerRun: EffectiveDefault<number>;
+  maxLinkedinSearches: EffectiveDefault<number>;
+  maxAdzunaSearches: EffectiveDefault<number>;
+  stopWhenNewBelow: EffectiveDefault<number>;
+  maxFitJudgments: EffectiveDefault<number>;
+  fitPendingTtlDays: EffectiveDefault<number>;
+  maxInputTokensPerRun: EffectiveDefault<number>;
+  maxOutputTokensPerRun: EffectiveDefault<number>;
+  maxJdChars: EffectiveDefault<number>;
+  requestTimeoutMs: EffectiveDefault<number>;
+};
